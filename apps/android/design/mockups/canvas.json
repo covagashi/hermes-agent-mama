@@ -1,0 +1,80 @@
+{
+  "artboards": [
+    {
+      "file": "Conexion.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "1 · Conexión (primera vez)"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 480,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "2 · Chats"
+    },
+    {
+      "file": "Chat.dc.html",
+      "x": 960,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "3 · Chat con respuesta en vivo"
+    },
+    {
+      "file": "Aprobacion.dc.html",
+      "x": 1440,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "4 · Sí / No"
+    },
+    {
+      "file": "Pregunta.dc.html",
+      "x": 1920,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "5 · Hermes pregunta"
+    },
+    {
+      "file": "Navegador.dc.html",
+      "x": 0,
+      "y": 984,
+      "w": 390,
+      "h": 844,
+      "title": "6 · Navegador visible"
+    },
+    {
+      "file": "Documento.dc.html",
+      "x": 480,
+      "y": 984,
+      "w": 390,
+      "h": 844,
+      "title": "7 · Documento listo"
+    },
+    {
+      "file": "QuePone.dc.html",
+      "x": 960,
+      "y": 984,
+      "w": 390,
+      "h": 844,
+      "title": "8 · ¿Qué pone aquí?"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "supuestos",
+      "x": 0,
+      "y": -230,
+      "w": 560,
+      "text": "Hermes para mamá — supuestos de diseño\n• Tipografía Atkinson Hyperlegible (pensada para baja visión); cuerpo 19 px, títulos 22–28 px.\n• Un solo acento verde calmado; los botones de parar/avisos en naranja suave, nunca rojo alarmante.\n• Todo botón ≥ 56 px de alto; una sola acción principal por pantalla.\n• Sin barra de estado dibujada: la pone Android.\n• Todos los datos son ficticios (Tienda Ejemplo, Farmacia del barrio)."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

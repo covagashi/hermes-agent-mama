@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Atkinson Hyperlegible', 'Trebuchet MS', system-ui, sans-serif; background: #FBF8F3; color: #1F1B16; }
+    a { color: #1B7A5F; } a:hover { color: #0F4D3B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #FBF8F3; display: flex; flex-direction: column; overflow: hidden; position: relative; padding-top: 28px;">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 24px 24px 8px;">
+  <div style="width: 64px; height: 64px; border-radius: 32px; background: #1B7A5F; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700;">H</div>
+  <div style="font-size: 28px; font-weight: 700; margin-top: 12px;">Conectar con Hermes</div>
+  <div style="font-size: 17px; color: #5B554C; line-height: 1.4;">Esta pantalla sólo se ve la primera vez. Tu hijo o hija te ayudará a rellenarla.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 18px; padding: 16px 24px;">
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+  <div style="font-size: 17px; font-weight: 700; color: #5B554C;">Dirección del servidor</div>
+  <div style="height: 60px; border-radius: 16px; background: #FFFFFF; border: 2px solid #E6DED2; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 19px;"><span style="color: #5B554C;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg></span><span style="flex-grow: 1;">hermes.example.invalid</span></div>
+</div>
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+  <div style="font-size: 17px; font-weight: 700; color: #5B554C;">Usuario</div>
+  <div style="height: 60px; border-radius: 16px; background: #FFFFFF; border: 2px solid #E6DED2; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 19px;"><span style="color: #5B554C;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span style="flex-grow: 1;">usuario</span></div>
+</div>
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+  <div style="font-size: 17px; font-weight: 700; color: #5B554C;">Contraseña</div>
+  <div style="height: 60px; border-radius: 16px; background: #FFFFFF; border: 2px solid #E6DED2; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 19px;"><span style="color: #5B554C;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span style="flex-grow: 1;"><span style="letter-spacing: 4px;">••••••••••</span></span><div style="color: #5B554C;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></div></div>
+</div>
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0;">
+    <div style="font-size: 18px; line-height: 1.3;">Leer las respuestas en voz alta</div>
+    <div style="width: 64px; height: 36px; border-radius: 18px; background: #1B7A5F; position: relative;"><div style="position: absolute; top: 4px; left: 32px; width: 28px; height: 28px; border-radius: 14px; background: #FFFFFF;"></div></div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; height: 52px; border-radius: 14px; background: #DDEFE7; color: #0F4D3B; padding: 0 16px; font-size: 17px; font-weight: 700;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>Conectado. Hermes está listo.</div>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 24px 28px;">
+  <div style="height: 64px; border-radius: 32px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 700; background: #FFFFFF; color: #0F4D3B; border: 2px solid #1B7A5F;">Probar conexión</div>
+  <div style="height: 64px; border-radius: 32px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 700; background: #1B7A5F; color: #FFFFFF; border: 2px solid #1B7A5F;">Guardar y empezar</div>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
