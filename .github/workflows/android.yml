@@ -94,6 +94,29 @@ jobs:
           if-no-files-found: ignore
 
   # ─────────────────────────────────────────────────────────────────────
+  # Tests jsdom del motor de snapshots (F1): hermes_snapshot.js se prueba
+  # en Node contra los fixtures HTML/golden de core-controller/js.
+  # ─────────────────────────────────────────────────────────────────────
+  controller-js:
+    name: SnapshotBuilder JS (jsdom)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/android/core-controller/js/package-lock.json
+
+      - name: npm ci + test
+        working-directory: apps/android/core-controller/js
+        run: |
+          npm ci
+          npm test
+
+  # ─────────────────────────────────────────────────────────────────────
   # Tests instrumentados en emulador API 35. Los runners de GitHub son
   # x86_64 → imagen google_apis;x86_64 (arm64 sólo sirve en local/Apple
   # Silicon). connectedDevDebugAndroidTest corre en :app (el único módulo
