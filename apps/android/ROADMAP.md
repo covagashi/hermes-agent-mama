@@ -9,8 +9,10 @@
 > Cada tarea es autocontenida: entradas, salidas, criterios de aceptación y tests. Las tareas
 > del mismo hito sin dependencia entre sí pueden ejecutarse en paralelo.
 
-Estado del documento: **v1 — 2026-09-14**. Todos los nombres de métodos, eventos y formas de
+Estado del documento: **v1.1 — 2026-09-14**. Todos los nombres de métodos, eventos y formas de
 payload de la §2 se han verificado contra el código del repo en esa fecha (rutas indicadas).
+Cambios v1.1: emulador de referencia **API 35** (era API 34); A1 documenta el arranque contra
+FakeGateway; B5 añade `:testing:run` como proceso independiente; strings por pantalla (§4).
 
 ---
 
@@ -359,7 +361,9 @@ Android, nada de tecnicismos en pantalla ("sesión" → "chat", "gateway" → "H
 - Lint: ktlint 1.x, detekt 1.23+ (configs en `config/`), Android Lint con `warningsAsErrors` en CI.
 - Versionado: `versionName` = `0.<hito>.<n>`; `versionCode` = número de run de CI.
 - Paquete raíz: `ai.hermes.mama`.
-- Strings: todos en `res/values/strings.xml` (es). Nada hardcodeado en Compose.
+- Strings: todos en `res/values/strings*.xml` (es), **un fichero por pantalla**
+  (`strings_chat.xml`, `strings_chats.xml`, …) para evitar conflictos entre PRs paralelos.
+  Nada hardcodeado en Compose.
 - Logs: `Timber`; en `mama` el árbol sólo registra `WARN+` y **redacta** cookies, tickets y
   cuerpos de mensajes.
 
@@ -374,14 +378,20 @@ tests. "JVM" = test unitario sin emulador; "Inst" = instrumentado en emulador.
 
 **A1 · Proyecto Gradle multi-módulo** — deps: ninguna
 - Entregables: estructura de §1.1, `libs.versions.toml`, flavors `dev`/`mama`, `.gitignore`
-  (keystores, `local.properties`), `README.md` con "cómo compilar en 3 comandos".
+  (keystores, `local.properties`), `README.md` con "cómo compilar en 3 comandos" **y el comando
+  exacto para arrancar la app contra el FakeGateway**:
+  `./gradlew :app:installDevDebug` +
+  `adb shell am start -n ai.hermes.mama.dev/.MainActivity --es fake_script <guion>`.
+  Mecanismo (sólo flavor `dev`): el extra `fake_script` hace que la app use como endpoint
+  `ws://10.0.2.2:8399` (FakeGateway standalone de B5) en lugar de las credenciales guardadas;
+  con la app vacía de A1 basta el override del endpoint — el guion real llega con B5.
 - Aceptación: `./gradlew assembleDevDebug` compila una app vacía con `MainActivity` Compose que
   muestra "Hermes". `./gradlew lint ktlintCheck detekt` en verde.
 - Tests: `app/src/test/…/SmokeTest.kt` (JVM) que arranca `MainActivity` con Robolectric.
 
 **A2 · CI (GitHub Actions)** — deps: A1
 - Entregables: `.github/workflows/android.yml`: jobs `lint`, `unit` (JVM, todos los módulos),
-  `instrumented` (emulador API 34, `reactivecircus/android-emulator-runner`), `build`
+  `instrumented` (emulador API 35, `reactivecircus/android-emulator-runner`), `build`
   (APK `mama` release firmado si existen los secretos, si no `debug`), `contract` (§A3).
   Caché de Gradle. Artefactos: APK/AAB + informes de tests + capturas de Roborazzi.
 - Aceptación: pipeline verde en un PR vacío; el APK aparece como artefacto.
@@ -452,7 +462,9 @@ tests. "JVM" = test unitario sin emulador; "Inst" = instrumentado en emulador.
   N `message.delta`, `message.complete`), `approval` (petición servidor→cliente), `clarify`,
   `browser.controller.*` (emite comandos y captura resultados), más endpoints HTTP de auth
   (`password-login`, `me`, `ws-ticket`). Guiones en JSON (`testing/scripts/*.json`).
-- Aceptación: usable desde tests JVM e instrumentados (se arranca en `@Before`).
+  Además arranca como **proceso independiente**: `./gradlew :testing:run` escucha en
+  `0.0.0.0:8399` (el emulador lo alcanza vía `10.0.2.2`), guion seleccionable por argumento.
+- Aceptación: usable desde tests JVM e instrumentados (se arranca en `@Before`) y como proceso.
 - Tests: `FakeGatewayTest` — un cliente B4 completa el guion "hola → 3 deltas → complete".
 
 **B6 · `SessionRepository` + Room** — deps: B4
@@ -498,7 +510,7 @@ tests. "JVM" = test unitario sin emulador; "Inst" = instrumentado en emulador.
   internet", `browser_*`→"🌐 Navegando", `read_file`/`terminal`→"📂 Mirando archivos", `email`/
   `gmail`→"📧 Leyendo el correo", `send_email`→"📤 Enviando correo", otro→"⏳ Trabajando…"),
   botón **Parar** (`session.interrupt`), auto-scroll salvo que la usuaria haya subido.
-- Aceptación: 500 mensajes cacheados scrollean a 60 fps en emulador API 34.
+- Aceptación: 500 mensajes cacheados scrollean a 60 fps en emulador API 35.
 - Tests: JVM `ChatViewModelTest` con guion de `FakeGateway` (deltas se concatenan en orden de
   `seq`; `message.complete` con `error` produce burbuja de error; `Reconnected` recarga
   historial y rellena con `session.events.since`); Inst: streaming visible; Roborazzi del chat.
@@ -726,7 +738,7 @@ Entregable "v1 funcional" = M0–M7 + M9. M8 es v1.1.
 ### 7.1 Pirámide
 - **JVM (≥ 70 % de los tests)**: `core-contract`, `core-gateway`, `core-controller`, ViewModels,
   mapeadores. Rápidos (< 60 s toda la suite), sin emulador.
-- **Instrumentados**: un emulador API 34 en CI; cada pantalla tiene ≥ 1 test de recorrido con
+- **Instrumentados**: un emulador API 35 en CI; cada pantalla tiene ≥ 1 test de recorrido con
   `FakeGateway`; `AccessibilityChecks` siempre activo.
 - **Screenshots (Roborazzi)**: componentes y pantallas, claro/oscuro, fuente 1.0×/1.3×/2.0×.
   Los PNG de referencia viven en `apps/android/screenshots/` y se actualizan con

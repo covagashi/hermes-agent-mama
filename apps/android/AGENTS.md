@@ -25,7 +25,7 @@ tocar nada.** Cada tarea del roadmap tiene ID, dependencias, criterios de acepta
   estén en el contrato. Un test falla si el fichero generado está desactualizado.
 - **Tests con cada tarea.** Ninguna tarea se cierra sin los tests que lista el roadmap en verde:
   `./gradlew :app:testDevDebugUnitTest` (JVM) y, cuando aplica, `connectedDevDebugAndroidTest`
-  (instrumentados, emulador API 34 en CI).
+  (instrumentados, emulador API 35 en CI).
 - **Estilo Kotlin.** `ktlint` + `detekt` (configs en `config/`). Sin `!!`, sin `GlobalScope`, sin
   `runBlocking` en producción. Coroutines + `StateFlow`; una única `Activity`; Compose M3.
 - **Commits pequeños, un ID de tarea por PR** (`android(A7): …`). El PR describe qué tests cubren
