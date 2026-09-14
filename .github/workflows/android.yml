@@ -1,0 +1,238 @@
+name: Android CI
+
+# CI del cliente Android "Hermes para mamá" (apps/android — ROADMAP §5, tarea A2).
+# Se dispara sólo cuando cambia el área Android, el generador de contrato (A3) o
+# este propio workflow. Las acciones se fijan por SHA como en el resto del repo.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/android/**"
+      - "scripts/gen_android_contract.py"
+      - ".github/workflows/android.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/android/**"
+      - "scripts/gen_android_contract.py"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # ktlint + detekt + Android Lint (warningsAsErrors) sobre los 9 módulos.
+  # ─────────────────────────────────────────────────────────────────────
+  lint:
+    name: ktlint + detekt + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: ktlintCheck + detekt + lint
+        working-directory: apps/android
+        run: ./gradlew ktlintCheck detekt lint --continue --stacktrace
+
+      - name: Informes de lint
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-lint-reports
+          path: apps/android/**/build/reports/
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Tests JVM de todos los módulos. `test` cubre los módulos JVM puros
+  # (core-*, testing) y los tests de librería; testDevDebugUnitTest /
+  # testMamaDebugUnitTest cubren los dos flavors de :app. JUnit 5 +
+  # Vintage (JUnit 4) ya vienen cableados desde A1.
+  # ─────────────────────────────────────────────────────────────────────
+  unit:
+    name: Tests unitarios JVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: test (todos los módulos) + flavors de :app
+        working-directory: apps/android
+        run: ./gradlew test testDevDebugUnitTest testMamaDebugUnitTest --continue --stacktrace
+
+      - name: Informes de tests + capturas Roborazzi
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-unit-test-reports
+          path: |
+            apps/android/**/build/reports/tests/
+            apps/android/**/build/test-results/
+            apps/android/**/build/outputs/roborazzi*/
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Tests instrumentados en emulador API 35. Los runners de GitHub son
+  # x86_64 → imagen google_apis;x86_64 (arm64 sólo sirve en local/Apple
+  # Silicon). connectedDevDebugAndroidTest corre en :app (el único módulo
+  # con flavors); connectedDebugAndroidTest cubre los feature-* (sin
+  # flavors). Sin tests instrumentados Gradle no-op → el job queda verde.
+  # ─────────────────────────────────────────────────────────────────────
+  instrumented:
+    name: Tests instrumentados (API 35)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Habilitar KVM (aceleración hardware del emulador)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: connectedDevDebugAndroidTest en AVD
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          working-directory: apps/android
+          script: ./gradlew connectedDevDebugAndroidTest connectedDebugAndroidTest --stacktrace
+
+      - name: Informes de tests instrumentados
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-instrumented-reports
+          path: |
+            apps/android/**/build/reports/androidTests/
+            apps/android/**/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────────────
+  # APK del flavor mama. Los secrets NO se pueden evaluar en `jobs.if`,
+  # así que se pasan a env y se comprueba su presencia en un paso previo.
+  # Con los 4 secretos → assembleMamaRelease con el keystore decodificado
+  # en $RUNNER_TEMP (el signingConfigs.release que los consume llega en
+  # J1; mientras tanto el release sale unsigned pero ejercita la ruta).
+  # Sin secretos → assembleMamaDebug. El APK se sube siempre.
+  # versionCode lo fija GITHUB_RUN_NUMBER vía app/build.gradle.kts.
+  # ─────────────────────────────────────────────────────────────────────
+  build:
+    name: APK mama (release firmado o debug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Detectar secretos de firma
+        id: signing
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && \
+             [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Secretos de firma presentes → build mamaRelease."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Sin secretos de firma → build mamaDebug."
+          fi
+
+      - name: Decodificar keystore a $RUNNER_TEMP
+        id: keystore
+        if: steps.signing.outputs.available == 'true'
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mama-release.jks"
+          echo "file=$RUNNER_TEMP/mama-release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: :app:assembleMamaRelease
+        if: steps.signing.outputs.available == 'true'
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.file }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleMamaRelease --stacktrace
+
+      - name: :app:assembleMamaDebug
+        if: steps.signing.outputs.available != 'true'
+        working-directory: apps/android
+        run: ./gradlew :app:assembleMamaDebug --stacktrace
+
+      - name: Subir APK/AAB
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: android-apk-mama
+          path: |
+            apps/android/app/build/outputs/apk/**/*.apk
+            apps/android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Contrato OpenRPC → Kotlin (A3). El script aún no existe: mientras no
+  # aterrice, el job degrada con elegancia; cuando exista, --check muerde.
+  # ─────────────────────────────────────────────────────────────────────
+  contract:
+    name: Contrato OpenRPC (A3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: gen_android_contract.py --check
+        run: |
+          if [ -f scripts/gen_android_contract.py ]; then
+            python scripts/gen_android_contract.py --check
+          else
+            echo "::notice file=scripts/gen_android_contract.py::El generador de contrato aún no existe (tarea A3 pendiente); comprobación aplazada."
+          fi
