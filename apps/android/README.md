@@ -39,8 +39,10 @@ mientras tanto el mecanismo de override ya está cableado:
 # 2. instalar el flavor dev en el emulador:
 ./gradlew :app:installDevDebug
 
-# 3. arrancar la app contra el FakeGateway (10.0.2.2 = host visto desde el emulador):
-adb shell am start -n ai.hermes.mama.dev/.MainActivity --es fake_script <guion>
+# 3. arrancar la app contra el FakeGateway (10.0.2.2 = host visto desde el emulador).
+# OJO: hay que usar el FQCN — ".MainActivity" se expandiría contra el
+# applicationId "ai.hermes.mama.dev" y la clase vive en "ai.hermes.mama".
+adb shell am start -n ai.hermes.mama.dev/ai.hermes.mama.MainActivity --es fake_script <guion>
 ```
 
 Con el extra `fake_script` presente, `DevGateway` (`app/…/DevGateway.kt`) registra

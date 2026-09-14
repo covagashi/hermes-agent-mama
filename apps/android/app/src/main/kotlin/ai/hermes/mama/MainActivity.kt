@@ -1,5 +1,6 @@
 package ai.hermes.mama
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -44,6 +45,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // Si en el futuro la activity pasa a singleTask/singleTop, el arranque
+    // llega por aquí: releyendo el intent no se pierde el extra fake_script.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        DevGateway.onNewIntent(intent)
     }
 }
 

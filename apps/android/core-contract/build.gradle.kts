@@ -4,7 +4,8 @@ plugins {
 }
 
 // Tipos generados del contrato OpenRPC (A3). JVM puro: cero dependencias Android.
-// jvmTarget 17 (no toolchain) para no exigir un JDK 17 instalado en la máquina.
+// jvmTarget 17 sin toolchain: compila con el JDK que ya corre Gradle (AGP exige
+// ≥ 17 de todos modos) y emite bytecode 17, sin exigir un JDK 17 aparte.
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

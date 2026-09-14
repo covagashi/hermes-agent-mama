@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sólo para el flavor dev: cleartext limitado a loopback/host del emulador.
+  - 10.0.2.2   → FakeGateway en el host (loopback del host visto desde el emulador).
+  - 127.0.0.1  → `adb reverse tcp:8399` (dispositivo físico con FakeGateway local).
+  Para un hermes serve en Tailscale (CGNAT 100.64.0.0/10): añade localmente
+  <domain includeSubdomains="false">100.x.y.z</domain> con la IP concreta del
+  servidor; no se habilita cleartext a rangos. mama siempre exige HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

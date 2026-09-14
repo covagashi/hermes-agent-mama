@@ -57,6 +57,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testRuntimeOnly(libs.junit.platform.launcher)
+    // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric/Room de B6).
+    testRuntimeOnly(libs.junit.vintage.engine)
 }
 
 tasks.withType<Test>().configureEach {

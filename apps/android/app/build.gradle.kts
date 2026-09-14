@@ -101,15 +101,19 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit.jupiter)
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.androidx.test.rules)
     testImplementation(project(":testing"))
+    testRuntimeOnly(libs.junit.vintage.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<Test>().configureEach {
-    // Robolectric (SmokeTest) corre con JUnit4: las reglas oficiales de Compose UI Test
-    // son junit4. Los módulos JVM/feature usan JUnit 5 (useJUnitPlatform).
-    useJUnit()
+    // JUnit Platform con ambos motores: Jupiter (JUnit 5, tests nuevos) y Vintage
+    // (JUnit 4: SmokeTest de Robolectric y las reglas oficiales de Compose UI Test).
+    useJUnitPlatform()
 }
