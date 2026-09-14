@@ -1,0 +1,18 @@
+{
+  "tool_id": "tool_0001",
+  "name": "browser_navigate",
+  "args": {
+    "detalle": "valor"
+  },
+  "duration_s": 1.5,
+  "result": {
+    "success": true
+  },
+  "summary": "Navegación completada",
+  "result_text": "Página cargada",
+  "inline_diff": "",
+  "todos": [
+    "x"
+  ],
+  "revision": 42
+}

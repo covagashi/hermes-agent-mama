@@ -1,0 +1,13 @@
+{
+  "name": "browser_navigate",
+  "width": 42,
+  "height": 42,
+  "token_estimate": 42,
+  "attached": true,
+  "path": "/home/usuario/factura.pdf",
+  "count": 42,
+  "remainder": "",
+  "text": "Aquí tienes la factura del pedido.",
+  "bytes": 42,
+  "message": "Hermes está buscando la factura"
+}

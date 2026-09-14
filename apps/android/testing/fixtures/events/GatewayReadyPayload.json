@@ -1,0 +1,25 @@
+{
+  "skin": {
+    "name": "browser_navigate",
+    "description": "Descargar factura PDF",
+    "colors": {
+      "ejemplo": "ejemplo"
+    },
+    "light_colors": {
+      "ejemplo": "ejemplo"
+    },
+    "dark_colors": {
+      "ejemplo": "ejemplo"
+    },
+    "branding": {
+      "ejemplo": "ejemplo"
+    },
+    "banner_logo": "",
+    "banner_hero": "",
+    "tool_prefix": "",
+    "help_header": ""
+  },
+  "change_events": true,
+  "replay_epoch": "ejemplo",
+  "heartbeat": true
+}

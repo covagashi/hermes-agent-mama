@@ -1,0 +1,7 @@
+{
+  "id": "req-42",
+  "method": "approval",
+  "params": {
+    "detalle": "valor"
+  }
+}

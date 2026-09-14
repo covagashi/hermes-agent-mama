@@ -1,0 +1,11 @@
+{
+  "session_id": "sess_7f2a1c",
+  "profile": "default",
+  "cols": 42,
+  "source": "android",
+  "lazy": true,
+  "defer_history": true,
+  "omit_messages": true,
+  "eager_build": true,
+  "close_on_disconnect": true
+}

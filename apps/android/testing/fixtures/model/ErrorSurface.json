@@ -1,0 +1,8 @@
+{
+  "layer": "ejemplo",
+  "code": "ejemplo",
+  "retryable": true,
+  "provider": "synthetic-provider",
+  "model": "synthetic-model",
+  "_unmodelled_extra": "se tolera pero no se preserva"
+}

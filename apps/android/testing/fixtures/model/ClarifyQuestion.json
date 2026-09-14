@@ -1,0 +1,8 @@
+{
+  "qid": "q1",
+  "question": "¿Qué pedido quieres revisar?",
+  "choices": [
+    "ejemplo"
+  ],
+  "multi_select": true
+}

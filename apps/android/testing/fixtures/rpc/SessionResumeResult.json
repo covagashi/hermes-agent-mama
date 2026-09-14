@@ -1,0 +1,165 @@
+{
+  "session_id": "sess_7f2a1c",
+  "message_count": 42,
+  "messages": [
+    {
+      "role": "assistant",
+      "text": "Aquí tienes la factura del pedido.",
+      "timestamp": 1.5,
+      "row_id": 42,
+      "display_kind": "normal",
+      "display_metadata": {
+        "success": true
+      },
+      "name": "browser_navigate",
+      "context": "Pedidos de la tienda",
+      "args": {
+        "detalle": "valor"
+      },
+      "reasoning": "…"
+    }
+  ],
+  "info": {
+    "model": "synthetic-model",
+    "provider": "synthetic-provider",
+    "reasoning_effort": "low",
+    "service_tier": "standard",
+    "fast": true,
+    "yolo": true,
+    "approval_mode": "ejemplo",
+    "tools": {
+      "ejemplo": [
+        "ejemplo"
+      ]
+    },
+    "skills": {
+      "ejemplo": [
+        "ejemplo"
+      ]
+    },
+    "cwd": "/home/usuario",
+    "branch": "ejemplo",
+    "project": {
+      "id": "req-42",
+      "slug": "tienda-ejemplo",
+      "name": "browser_navigate",
+      "primary_path": "/home/usuario/tienda"
+    },
+    "terminal_backend": "local",
+    "personality": "helpful",
+    "running": true,
+    "turn_started_at": 1.5,
+    "title": "Factura de la tienda",
+    "stored_session_id": "stored_7f2a1c",
+    "desktop_contract": 1,
+    "version": "0.0.0-test",
+    "release_date": "2026-09-14",
+    "update_behind": {
+      "success": true
+    },
+    "update_command": "hermes update",
+    "usage": {
+      "model": "synthetic-model",
+      "input": 42,
+      "output": 42,
+      "reasoning": 42,
+      "prompt": 42,
+      "completion": 42,
+      "total": 42,
+      "calls": 42,
+      "compressions": 42,
+      "context_used": 42,
+      "context_max": 42,
+      "context_percent": 42,
+      "context_source": "estimate",
+      "context_estimated": true,
+      "cache_hit_pct": 42,
+      "cache_read": 42,
+      "cache_write": 42,
+      "avg_latency_s": 1.5,
+      "avg_tps": 1.5,
+      "active_subagents": 42,
+      "dev_credits_spent_micros": 42,
+      "cost_usd": 1.5,
+      "cost_status": "ok"
+    },
+    "profile_name": "default",
+    "mcp_servers": [
+      {
+        "name": "browser_navigate",
+        "status": "running",
+        "tool_count": 42,
+        "error": "ejemplo"
+      }
+    ],
+    "system_prompt": "Responde en español y frases cortas.",
+    "credential_warning": "Sin credenciales de ejemplo",
+    "lazy": true
+  },
+  "stored_session_id": "stored_7f2a1c",
+  "resumed": "resumed",
+  "session_key": "key_7f2a1c",
+  "messages_omitted": true,
+  "hydrating": true,
+  "running": true,
+  "turn_started_at": 1.5,
+  "started_at": 1.5,
+  "status": "running",
+  "inflight": {
+    "assistant": "Aquí tienes…",
+    "streaming": true,
+    "user": "Hola, Hermes",
+    "corrections": [
+      "ejemplo"
+    ],
+    "correction_offsets": [
+      1
+    ],
+    "error": "ejemplo",
+    "status": "running",
+    "recoverable": true,
+    "error_surface": {
+      "detalle": "valor"
+    }
+  },
+  "queued": {
+    "user": "Hola, Hermes"
+  },
+  "pending_approval": {
+    "request_id": "req-42",
+    "command": "ls -la",
+    "description": "Descargar factura PDF",
+    "pattern_key": "terminal",
+    "pattern_keys": [
+      "ejemplo"
+    ],
+    "allow_permanent": true,
+    "allow_session": true,
+    "smart_denied": true,
+    "choices": [
+      "ejemplo"
+    ],
+    "tool_name": "browser_navigate"
+  },
+  "open_requests": [
+    {
+      "id": "req-42",
+      "method": "approval",
+      "params": {
+        "detalle": "valor"
+      }
+    }
+  ],
+  "todo_state": {
+    "todos": [
+      {
+        "detalle": "valor"
+      }
+    ],
+    "revision": 42
+  },
+  "auto_continue": {
+    "attempt": 42,
+    "interrupted_at": 1.5
+  }
+}

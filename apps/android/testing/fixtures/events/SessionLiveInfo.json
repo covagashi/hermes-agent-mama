@@ -1,0 +1,78 @@
+{
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reasoning_effort": "low",
+  "service_tier": "standard",
+  "fast": true,
+  "yolo": true,
+  "approval_mode": "ejemplo",
+  "tools": {
+    "ejemplo": [
+      "ejemplo"
+    ]
+  },
+  "skills": {
+    "ejemplo": [
+      "ejemplo"
+    ]
+  },
+  "cwd": "/home/usuario",
+  "branch": "ejemplo",
+  "project": {
+    "id": "req-42",
+    "slug": "tienda-ejemplo",
+    "name": "browser_navigate",
+    "primary_path": "/home/usuario/tienda"
+  },
+  "terminal_backend": "local",
+  "personality": "helpful",
+  "running": true,
+  "turn_started_at": 1.5,
+  "title": "Factura de la tienda",
+  "stored_session_id": "stored_7f2a1c",
+  "desktop_contract": 1,
+  "version": "0.0.0-test",
+  "release_date": "2026-09-14",
+  "update_behind": {
+    "success": true
+  },
+  "update_command": "hermes update",
+  "usage": {
+    "model": "synthetic-model",
+    "input": 42,
+    "output": 42,
+    "reasoning": 42,
+    "prompt": 42,
+    "completion": 42,
+    "total": 42,
+    "calls": 42,
+    "compressions": 42,
+    "context_used": 42,
+    "context_max": 42,
+    "context_percent": 42,
+    "context_source": "estimate",
+    "context_estimated": true,
+    "cache_hit_pct": 42,
+    "cache_read": 42,
+    "cache_write": 42,
+    "avg_latency_s": 1.5,
+    "avg_tps": 1.5,
+    "active_subagents": 42,
+    "dev_credits_spent_micros": 42,
+    "cost_usd": 1.5,
+    "cost_status": "ok"
+  },
+  "profile_name": "default",
+  "mcp_servers": [
+    {
+      "name": "browser_navigate",
+      "status": "running",
+      "tool_count": 42,
+      "error": "ejemplo"
+    }
+  ],
+  "system_prompt": "Responde en español y frases cortas.",
+  "credential_warning": "Sin credenciales de ejemplo",
+  "lazy": true,
+  "_unmodelled_extra": "se tolera pero no se preserva"
+}

@@ -1,0 +1,8 @@
+{
+  "attached": true,
+  "name": "browser_navigate",
+  "path": "/home/usuario/factura.pdf",
+  "ref_path": "files/factura.pdf",
+  "ref_text": "[Attached file: factura.pdf]",
+  "uploaded": true
+}

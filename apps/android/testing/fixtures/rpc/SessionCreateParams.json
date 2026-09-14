@@ -1,0 +1,24 @@
+{
+  "profile": "default",
+  "cols": 42,
+  "source": "android",
+  "cwd": "/home/usuario",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "ejemplo",
+      "text": "Aquí tienes la factura del pedido.",
+      "display_kind": "normal"
+    }
+  ],
+  "parent_session_id": "ejemplo",
+  "title": "Factura de la tienda",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reasoning_effort": "low",
+  "fast": true,
+  "close_on_disconnect": true,
+  "hidden": true,
+  "room_plumbing": true,
+  "follow_profile_config": true
+}

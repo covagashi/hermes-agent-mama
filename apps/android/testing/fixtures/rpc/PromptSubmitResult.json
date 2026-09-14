@@ -1,0 +1,11 @@
+{
+  "status": "streaming",
+  "voice_stopped": true,
+  "survivor_user_row_ids": [
+    1
+  ],
+  "survivor_row_id_map": {
+    "ejemplo": 1
+  },
+  "turn_isolation": true
+}

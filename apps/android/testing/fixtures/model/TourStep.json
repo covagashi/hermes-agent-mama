@@ -1,0 +1,7 @@
+{
+  "selector": "#pedidos",
+  "title": "Factura de la tienda",
+  "text": "Aquí tienes la factura del pedido.",
+  "side": "left",
+  "_unmodelled_extra": "se tolera pero no se preserva"
+}

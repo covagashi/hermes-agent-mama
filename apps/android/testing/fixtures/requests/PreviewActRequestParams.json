@@ -1,0 +1,13 @@
+{
+  "session_id": "sess_7f2a1c",
+  "action": "browser_click",
+  "ref": "@e5",
+  "selector": "#pedidos",
+  "text": "Aquí tienes la factura del pedido.",
+  "key": "Enter",
+  "submit": true,
+  "full": true,
+  "to": "bottom",
+  "amount": 42,
+  "max": 42
+}
