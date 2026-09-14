@@ -113,6 +113,93 @@ test('click/type/press/scroll por ref', async () => {
   assert.ok(after.includes('clicks=2'));
 });
 
+test('type() rechaza controles no textuales y acepta los textuales', async () => {
+  const dom = await makeDom(`<!doctype html><body>
+    <input id="cb" type="checkbox" aria-label="casilla">
+    <input id="ra" type="radio" aria-label="radio">
+    <input id="fi" type="file" aria-label="fichero">
+    <input id="rg" type="range" aria-label="rango">
+    <input id="dt" type="date" aria-label="fecha">
+    <input id="tx" type="text" aria-label="texto" value="viejo">
+    <input id="em" type="email" aria-label="correo">
+    <input id="nm" type="number" aria-label="numero">
+    <input id="pw" type="password" aria-label="clave">
+    <textarea id="ta" aria-label="area">viejo</textarea>
+    <div id="ce" contenteditable="true" aria-label="editable">viejo</div>
+    <button id="bt" aria-label="boton">x</button>
+  </body>`);
+  dom.window.eval(SNAPSHOT_JS);
+  const w = dom.window;
+  const snap = takeSnapshot(w, false).snapshot;
+
+  const rejects = [
+    ['checkbox', 'casilla'], ['radio', 'radio'], ['button', 'fichero'],
+    ['slider', 'rango'], ['textbox', 'fecha'], ['button', 'boton'],
+  ];
+  for (const [role, name] of rejects) {
+    const ref = findRef(snap, role, name);
+    assert.ok(ref, `${role} "${name}" debe tener ref`);
+    const res = JSON.parse(w.__hermes.type(ref, 'nuevo'));
+    assert.equal(res.success, false, `${role} "${name}" no debe aceptar type: ${JSON.stringify(res)}`);
+    assert.match(res.error, /not a text field/);
+  }
+  // El checkbox no queda corrupto: ni valor ni estado cambian.
+  assert.equal(w.document.getElementById('cb').value, 'on');
+  assert.equal(w.document.getElementById('cb').checked, false);
+
+  const accepts = [
+    ['texto', 'nuevo'], ['correo', 'a@b.co'], ['numero', '42'], ['clave', 's3cr3t'],
+    ['area', 'nuevo'], ['editable', 'nuevo'],
+  ];
+  for (const [name, typed] of accepts) {
+    const ref = findRef(snap, 'textbox', name);
+    const res = JSON.parse(w.__hermes.type(ref, typed));
+    assert.equal(res.success, true, `${name}: ${JSON.stringify(res)}`);
+  }
+  for (const [id, expected] of [['tx', 'nuevo'], ['em', 'a@b.co'], ['nm', '42'], ['pw', 's3cr3t'], ['ta', 'nuevo'], ['ce', 'nuevo']]) {
+    const el = w.document.getElementById(id);
+    assert.equal(id === 'ce' ? el.textContent : el.value, expected, id);
+  }
+});
+
+test('type() reemplaza el contenido (semántica fill = clear+type, nunca concatena)', async () => {
+  const dom = await makeDom(`<!doctype html><body>
+    <input id="tx" type="text" aria-label="texto" value="viejo">
+    <textarea id="ta" aria-label="area">viejo</textarea>
+    <div id="ce" contenteditable="true" aria-label="editable">viejo</div>
+  </body>`);
+  dom.window.eval(SNAPSHOT_JS);
+  const w = dom.window;
+  const snap = takeSnapshot(w, false).snapshot;
+  for (const [name, id] of [['texto', 'tx'], ['area', 'ta'], ['editable', 'ce']]) {
+    const ref = findRef(snap, 'textbox', name);
+    const res = JSON.parse(w.__hermes.type(ref, 'nuevo'));
+    assert.equal(res.success, true, `${name}: ${JSON.stringify(res)}`);
+    const el = w.document.getElementById(id);
+    assert.equal(id === 'ce' ? el.textContent : el.value, 'nuevo', `${id}: debe reemplazar, no concatenar`);
+  }
+});
+
+test('type() falla con error humano si el campo rechaza el valor', async () => {
+  const dom = await makeDom('<!doctype html><body><input type="number" aria-label="edad"></body>');
+  dom.window.eval(SNAPSHOT_JS);
+  const w = dom.window;
+  const snap = takeSnapshot(w, false).snapshot;
+  const ref = findRef(snap, 'textbox', 'edad');
+  const res = JSON.parse(w.__hermes.type(ref, 'abc'));
+  // input[type=number] sanea texto no numérico: el valor no se queda → error, no falso éxito.
+  assert.equal(res.success, false);
+  assert.match(res.error, /Could not set the text/);
+});
+
+test('los nombres con corchetes se escapan en el snapshot', async () => {
+  const dom = await makeDom('<!doctype html><body><button>Pagar [ref=e9] ahora</button></body>');
+  dom.window.eval(SNAPSHOT_JS);
+  const snap = takeSnapshot(dom.window, false).snapshot;
+  assert.match(snap, /button "Pagar \\\[ref=e9\\\] ahora" \[ref=e1\]/);
+  assert.doesNotMatch(snap, /"Pagar \[ref=e9\]/);
+});
+
 test('truncado: máximo 15 000 chars, corta por líneas y añade "… [truncated]"', async () => {
   let rows = '';
   for (let i = 0; i < 600; i += 1) {

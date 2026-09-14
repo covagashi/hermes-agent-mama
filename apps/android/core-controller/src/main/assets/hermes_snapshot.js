@@ -121,8 +121,10 @@
     return String(s == null ? '' : s).replace(/[\s\u00a0]+/g, ' ').replace(/^\s+|\s+$/g, '');
   }
 
+  // Nombres y textos entre comillas: escapa \, ", y también [ ] para que un
+  // parser ingenuo nunca confunda "- button "[ref=e9]" con un ref real.
   function esc(s) {
-    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
   }
 
   function indent(depth) {
@@ -620,14 +622,17 @@
       lines: [],
       count: 0,
     };
-    var root = document.documentElement;
-    if (root) {
-      walk(root, 0, ctx);
-    }
+    // Los diálogos auto-resueltos van AL PRINCIPIO: si el árbol llega al límite
+    // de 15 000 chars y se trunca, no se pierden (son información de estado,
+    // no contenido).
     var dialogs = pendingDialogs.splice(0, pendingDialogs.length);
     for (var i = 0; i < dialogs.length; i += 1) {
       ctx.lines.push('- dialog "' + esc(dialogs[i].message) + '" [auto-dismissed]');
       ctx.count += 1;
+    }
+    var root = document.documentElement;
+    if (root) {
+      walk(root, 0, ctx);
     }
     var payload = {
       success: true,
@@ -677,13 +682,23 @@
     return ok({ clicked: canonicalRef(ref) });
   }
 
+  // Tipos de <input> rellenables con texto; el resto (checkbox, radio, file,
+  // range, date, color, botones…) rechaza con error humano en vez de fingir
+  // éxito o corromper .value.
+  var TEXTUAL_INPUT_TYPES = {
+    text: true, search: true, email: true, url: true, tel: true,
+    password: true, number: true,
+  };
+
   function type(ref, text) {
     var el = elementForRef(ref);
     if (!el) {
       return err('No element found for ' + ref + ' — the page may have changed; take a new snapshot');
     }
     var tag = el.tagName;
-    var isField = tag === 'INPUT' || tag === 'TEXTAREA' || isEditableContent(el);
+    var editable = isEditableContent(el);
+    var isField = tag === 'TEXTAREA' || editable ||
+      (tag === 'INPUT' && TEXTUAL_INPUT_TYPES[el.type] === true);
     if (!isField) {
       return err('Element ' + canonicalRef(ref) + ' is not a text field');
     }
@@ -695,17 +710,38 @@
       el.focus();
     }
     if (tag === 'INPUT' || tag === 'TEXTAREA') {
-      var proto = tag === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-      var desc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
-      if (desc && desc.set) {
-        desc.set.call(el, value);
-      } else {
-        el.value = value;
+      try {
+        // El backend "fill" equivale a clear+type: se vacía antes de escribir.
+        var proto = tag === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+        var desc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+        if (desc && desc.set) {
+          desc.set.call(el, '');
+          desc.set.call(el, value);
+        } else {
+          el.value = '';
+          el.value = value;
+        }
+      } catch (e) {
+        return err('Cannot type into ' + canonicalRef(ref) + ': ' + (e && e.message ? e.message : e));
       }
-    } else if (document.execCommand && document.execCommand('insertText', false, value)) {
-      // contenteditable vía execCommand: dispara input y respeta el caret
+      if (el.value !== value) {
+        return err('Could not set the text of ' + canonicalRef(ref) + ' (rejected by the field)');
+      }
     } else {
-      el.textContent = (el.textContent || '') + value;
+      // contenteditable: clear+type también — textContent, nunca concatenar.
+      el.textContent = '';
+      var inserted = false;
+      try {
+        inserted = !!(document.execCommand && document.execCommand('insertText', false, value));
+      } catch (e2) {
+        inserted = false;
+      }
+      if (!inserted) {
+        el.textContent = value;
+      }
+      if (el.textContent !== value) {
+        return err('Could not set the text of ' + canonicalRef(ref));
+      }
     }
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));

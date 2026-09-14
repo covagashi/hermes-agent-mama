@@ -9,7 +9,7 @@
       - text "Franja horaria"
       - radio "Por la mañana" [ref=e6] [checked]
       - radio "Por la tarde" [ref=e7]
-    - textbox "Notas para el repartidor" [ref=e8]
+    - textbox "Notas para el repartidor \[opcional\]" [ref=e8]
     - checkbox "Quiero la factura en papel" [ref=e9] [checked]
     - checkbox "Enviarme ofertas" [ref=e10]
     - button "Guardar" [ref=e11]
