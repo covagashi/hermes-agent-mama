@@ -159,7 +159,7 @@ Fuente: `apps/shared/src/gateway-contract.openrpc.json` (`components.schemas`).
 | `session.title` | `{session_id, title}` | — | renombrar |
 | `session.delete` | `{session_id: STORED_ID}` | — | borrar (con confirmación) |
 | `session.interrupt` | `{session_id}` | — | botón **Parar** |
-| `session.events.since` | `{session_id, seq}` | eventos perdidos | rellenar huecos tras reconexión |
+| `session.events.since` | `{session_id, last_seen}` | eventos perdidos | rellenar huecos tras reconexión |
 | `prompt.submit` | `{session_id, text, surface:"android", voice_context?}` | `{status?}` | enviar mensaje |
 | `image.attach_bytes` | `{session_id, content_base64, filename}` | `{attached, name, width, height…}` | foto (se adjunta al **siguiente** `prompt.submit`) |
 | `file.attach` | `{session_id, data_url, name}` | `{attached, name, path, ref_path, ref_text}` | PDF/otros → incluir `ref_text` en el texto del prompt |
@@ -208,7 +208,7 @@ Fuente: `apps/shared/src/gateway-contract.generated.ts` (`GATEWAY_EVENT_TYPES`).
 | `method` | `params` | `result` que devuelve la app |
 |---|---|---|
 | `approval` | `{session_id, request_id, command?, description?, choices?:[…], tool_name?, allow_session?, allow_permanent?}` | `{"choice": "once" \| "deny"}` — la app **sólo** ofrece Sí (`once`) / No (`deny`); nunca `always`/`session`. Se muestra `description` (o `command` si no hay) en lenguaje llano. |
-| `clarify` | `{session_id, question?, choices?, multi_select?, questions?:[{id?, question, choices?…}]}` | `{"answer": "…"}` para una pregunta; `{"answers": {id: "…"}}` para lote. Con `choices` → botones grandes; sin → campo de texto + micrófono. |
+| `clarify` | `{session_id, question?, choices?, multi_select?, questions?:[{qid?, question, choices?…}]}` | `{"answer": "…"}` para una pregunta; `{"answers": {qid: "…"}}` para lote. Con `choices` → botones grandes; sin → campo de texto + micrófono. |
 | `secret`, `sudo`, `vault.*`, `mcp.setup`, `preview.*`, `terminal.read`, `window.read`, `tour` | — | responder error `-32601` (no soportado) y mostrar "Hermes necesita algo que esta app no puede dar; pídeselo a [tu hijo/a]" — texto configurable en `strings.xml` como `helper_name`. |
 
 ### 2.6 Protocolo del controlador de navegador (fase 1)
@@ -808,6 +808,12 @@ registrar controlador). Sirve para detectar drift real del backend.
    puede ayudar en ese flujo (OAuth de Google se hace en el servidor/desktop).
 7. **Idioma del modelo**: configurar el perfil del servidor para que responda en español y en
    frases cortas (system prompt/persona del lado servidor), no desde la app.
+8. **Resultados del controlador sin redacción de secretos** (encontrado en revisión de F1):
+   `tools/browser_extension_router.py` devuelve el `result` del broker verbatim, mientras el
+   camino local pasa la salida del navegador por `redact_sensitive_text(force=True)`
+   (`tools/browser_tool.py`). Un snapshot con texto con forma de secreto (`sk-…`,
+   `password=…`) llega al modelo sin redactar. Fix de backend: post-procesar
+   `browser.controller.result` en el broker con el mismo redactor — no parcheable desde la app.
 
 ---
 
