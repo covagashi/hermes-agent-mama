@@ -26,7 +26,7 @@
     <string name="voice_error_no_match">No te he entendido. Inténtalo de nuevo.</string>
     <string name="voice_error_audio">Hay un problema con el micrófono. Inténtalo de nuevo.</string>
     <string name="voice_error_network">El dictado necesita conexión a internet. Inténtalo más tarde o escribe tu mensaje.</string>
-    <string name="voice_error_server">El servicio de voz no responde. Inténtalo más tarde.</string>
+    <string name="voice_error_server">Hermes no puede escucharte ahora. Inténtalo más tarde.</string>
     <string name="voice_error_busy">El micrófono está ocupado. Espera un poco e inténtalo de nuevo.</string>
     <string name="voice_error_language">Este móvil no puede dictar en español. Puedes escribir tu mensaje.</string>
     <string name="voice_error_unknown">No se ha podido dictar. Puedes escribir tu mensaje.</string>

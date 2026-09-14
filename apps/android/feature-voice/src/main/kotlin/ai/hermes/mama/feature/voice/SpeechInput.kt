@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.speech.SpeechRecognizer
+import androidx.annotation.MainThread
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -140,18 +141,29 @@ class SpeechInput(
      * texto final llega como [SpeechState.Done] al soltar ([stopListening]) o cuando
      * el servicio cierra la escucha. Los fallos llegan como [SpeechState.Error].
      */
+    @MainThread
     fun startListening() {
-        if (!audioPermission.isGranted()) {
-            _state.value = SpeechState.Error(SpeechErrorKind.PermissionDenied)
-            return
-        }
-        if (!backend.isRecognitionAvailable()) {
-            _state.value = SpeechState.Error(SpeechErrorKind.NotAvailable)
+        val rejection =
+            when {
+                !audioPermission.isGranted() -> SpeechErrorKind.PermissionDenied
+                !backend.isRecognitionAvailable() -> SpeechErrorKind.NotAvailable
+                else -> null
+            }
+        if (rejection != null) {
+            _state.value = SpeechState.Error(rejection)
             return
         }
         releaseEngine(cancel = true)
         val listener = SessionListener()
-        val session = backend.createEngine(listener)
+        // createSpeechRecognizer puede lanzar (servicio roto, hilo no-main, SecurityException
+        // en algunos OEM) aunque isRecognitionAvailable haya dicho que sí: nunca se crashea.
+        val session =
+            runCatching { backend.createEngine(listener) }
+                .getOrElse { e ->
+                    Timber.w(e, "No se pudo crear el reconocedor")
+                    fail(SpeechErrorKind.Unknown)
+                    return
+                }
         listener.session = session
         engine = session
         _state.value = SpeechState.Listening()
@@ -174,17 +186,21 @@ class SpeechInput(
      * La usuaria suelta el micrófono: el servicio deja de escuchar y el resultado
      * final llega por el listener como [SpeechState.Done] / [SpeechState.Error].
      */
+    @MainThread
     fun stopListening() {
-        engine?.stop()
+        runCatching { engine?.stop() }
+            .onFailure { e -> Timber.w(e, "No se pudo cerrar la escucha") }
     }
 
     /** Aborta la sesión en curso sin emitir resultado y vuelve a [SpeechState.Idle]. */
+    @MainThread
     fun cancel() {
         releaseEngine(cancel = true)
         _state.value = SpeechState.Idle
     }
 
     /** Libera el reconocedor por completo (onCleared del ViewModel / onDestroy). */
+    @MainThread
     fun release() = cancel()
 
     private fun fail(kind: SpeechErrorKind) {
@@ -244,13 +260,16 @@ class SpeechInput(
          * Construye el [SpeechInput] real sobre [SpeechRecognizer] del sistema.
          * Llamar en el hilo principal.
          */
+        @MainThread
         fun create(context: Context): SpeechInput =
             SpeechInput(
                 backend = SpeechRecognizerBackend(context.applicationContext),
                 audioPermission =
                     AudioPermissionChecker {
-                        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                            PackageManager.PERMISSION_GRANTED
+                        ContextCompat.checkSelfPermission(
+                            context.applicationContext,
+                            Manifest.permission.RECORD_AUDIO,
+                        ) == PackageManager.PERMISSION_GRANTED
                     },
             )
     }

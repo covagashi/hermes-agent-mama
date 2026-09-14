@@ -200,6 +200,41 @@ class SpeechInputTest {
     }
 
     @Test
+    fun `si createEngine lanza emite Error Unknown y no queda Listening colgado`() {
+        // SpeechRecognizer.createSpeechRecognizer devuelve tipo plataforma (puede ser null → NPE)
+        // y lanza RuntimeException/SecurityException con el servicio roto en algunos OEMs.
+        val backendRoto =
+            object : SpeechBackend {
+                override fun isRecognitionAvailable() = true
+
+                override fun supportsOnDeviceRecognition() = false
+
+                override fun createEngine(listener: SpeechEngineListener): SpeechEngine {
+                    error("servicio caído")
+                }
+            }
+        val inputRoto = SpeechInput(backendRoto, audioPermission = { true })
+
+        inputRoto.startListening()
+
+        val state = assertIs<SpeechState.Error>(inputRoto.state.value)
+        assertEquals(SpeechErrorKind.Unknown, state.kind)
+    }
+
+    @Test
+    fun `stopListening con engine roto no crashea`() {
+        val engine = startListening()
+        engine.failOnStop = true
+
+        input.stopListening()
+
+        // El fallo de stop() se traga: la sesión sigue y aún puede llegar resultado.
+        assertEquals(SpeechState.Listening(""), input.state.value)
+        engine.emitResult("igualmente llegó")
+        assertEquals(SpeechState.Done("igualmente llegó"), input.state.value)
+    }
+
+    @Test
     fun `si el engine falla al arrancar emite Error Unknown`() {
         val backendRoto =
             object : SpeechBackend {

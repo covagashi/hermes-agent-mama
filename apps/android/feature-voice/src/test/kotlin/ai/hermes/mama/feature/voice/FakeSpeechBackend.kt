@@ -35,6 +35,9 @@ class FakeSpeechEngine(
     var destroyed = false
         private set
 
+    /** Si true, [stop] lanza (simula un recognizer roto al soltar el micro). */
+    var failOnStop = false
+
     override fun start(config: SpeechConfig) {
         started = true
         lastConfig = config
@@ -42,6 +45,7 @@ class FakeSpeechEngine(
 
     override fun stop() {
         stopped = true
+        if (failOnStop) error("stop roto")
     }
 
     override fun cancel() {
