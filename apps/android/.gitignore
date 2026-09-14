@@ -1,0 +1,20 @@
+# Build
+.gradle/
+build/
+.kotlin/
+.cxx/
+captures/
+*.hprof
+
+# Config local de SDK (la genera cada desarrollador; ver README.md)
+local.properties
+
+# Firmas y secretos — NUNCA commitear (repo público)
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# IDE
+.idea/
+*.iml

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Lint compartido por todos los módulos Android (lint.lintConfig). -->
+<lint>
+    <!-- El ROADMAP (§0) fija targetSdk 35 a propósito. -->
+    <issue id="OldTargetApi" severity="ignore" />
+
+    <!-- El icono adaptativo vive en mipmap-anydpi-v26 (convención adaptive-icon). -->
+    <issue id="ObsoleteSdkInt" severity="ignore" />
+
+    <!-- J2 endurece backup/red (allowBackup=false, network_security_config). -->
+    <issue id="AllowBackup" severity="ignore" />
+    <issue id="DataExtractionRules" severity="ignore" />
+
+    <!-- Las versiones se fijan deliberadamente en gradle/libs.versions.toml. -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+</lint>
