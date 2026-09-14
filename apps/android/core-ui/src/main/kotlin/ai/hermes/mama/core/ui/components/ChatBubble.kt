@@ -54,8 +54,15 @@ fun ChatBubble(
         Surface(
             modifier =
                 Modifier
-                    .widthIn(max = MamaDimens.BubbleMaxWidth)
-                    .heightIn(min = MamaDimens.MinTouchTarget),
+                    // Mockup Chat: la usuaria ~300 px, Hermes ~320 px.
+                    .widthIn(
+                        max =
+                            if (isUser) {
+                                MamaDimens.BubbleMaxWidthUser
+                            } else {
+                                MamaDimens.BubbleMaxWidthHermes
+                            },
+                    ).heightIn(min = MamaDimens.MinTouchTarget),
             shape =
                 RoundedCornerShape(
                     topStart = MamaDimens.BubbleCorner,

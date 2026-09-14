@@ -56,7 +56,7 @@ internal fun ChatBubbleSheet() {
         onListenClick = {},
     )
     ChatBubble(
-        text = "Aquí tienes la factura. ¿Quieres que la abra?",
+        text = stringResource(R.string.design_example_bubble_hermes_doc),
         author = ChatBubbleAuthor.Hermes,
     )
 }
@@ -77,7 +77,7 @@ internal fun ActivityChipSheet() {
 @Composable
 internal fun TopBannerSheet() {
     TopBanner()
-    TopBanner(text = "Hermes está trabajando. Puedes esperar aquí.")
+    TopBanner(text = stringResource(R.string.design_example_banner_working))
 }
 
 @Composable

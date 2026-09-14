@@ -30,7 +30,9 @@ private val MockupWidth = 390.dp
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34])
+// w390dp: sin él, la pantalla de Robolectric es 320 dp y el Surface de
+// MockupWidth quedaría coaccionado — los goldens deben ser 390 dp reales.
+@Config(sdk = [34], qualifiers = "w390dp")
 abstract class ScreenshotTestBase {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()

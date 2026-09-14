@@ -21,4 +21,6 @@
     <string name="design_example_empty_body">Pulsa «Nuevo chat» y cuéntale a Hermes qué necesitas.</string>
     <string name="design_example_bubble_user">Compré una lavadora la semana pasada y no encuentro la factura</string>
     <string name="design_example_bubble_hermes">Voy a mirar en tu correo y en la tienda. Dame un minuto.</string>
+    <string name="design_example_bubble_hermes_doc">Aquí tienes la factura. ¿Quieres que la abra?</string>
+    <string name="design_example_banner_working">Hermes está trabajando. Puedes esperar aquí.</string>
 </resources>

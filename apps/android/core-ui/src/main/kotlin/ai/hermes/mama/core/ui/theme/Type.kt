@@ -39,9 +39,19 @@ private fun mamaStyle(
  * pantalla 22 sp, título de tarjeta 24 sp, etiquetas 16–17 sp, botones 20 sp
  * en negrita. Todo ≥ 14 sp: nada de letra pequeña (AGENTS.md: ≥ 18 sp en el
  * chat, aquí el cuerpo es 19).
+ *
+ * Los 15 slots de M3 quedan definidos con Atkinson: los de familia display y
+ * headlineLarge apenas se usan en la app, pero si un feature-* los invoca no
+ * deben caer a la fuente por defecto (Roboto) ni a tamaños fuera de escala.
  */
 val MamaTypography =
     Typography(
+        // Titulares de portada; en la escala, por encima de los encabezados.
+        displayLarge = mamaStyle(FontWeight.Bold, 40f, 48f),
+        displayMedium = mamaStyle(FontWeight.Bold, 36f, 44f),
+        displaySmall = mamaStyle(FontWeight.Bold, 34f, 40f),
+        // Nombre de la app / encabezados destacados (MainActivity).
+        headlineLarge = mamaStyle(FontWeight.Bold, 30f, 36f),
         // Encabezado de pantalla ("Conectar con Hermes" en Conexión).
         headlineMedium = mamaStyle(FontWeight.Bold, 28f, 34f),
         // Título de tarjeta (Aprobación, Pregunta, hoja inferior).

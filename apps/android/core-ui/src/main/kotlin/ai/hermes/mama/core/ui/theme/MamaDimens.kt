@@ -34,8 +34,11 @@ object MamaDimens {
     /** Radio superior de la hoja inferior (aprobaciones, documentos). */
     val SheetCorner = 28.dp
 
-    /** Ancho máximo de una burbuja de chat. */
-    val BubbleMaxWidth = 320.dp
+    /** Ancho máximo de la burbuja de la usuaria (mockup Chat: ~300 px). */
+    val BubbleMaxWidthUser = 300.dp
+
+    /** Ancho máximo de la burbuja de Hermes (mockup Chat: ~320 px). */
+    val BubbleMaxWidthHermes = 320.dp
 
     /** Padding horizontal interno de las burbujas. */
     val BubblePaddingHorizontal = 18.dp

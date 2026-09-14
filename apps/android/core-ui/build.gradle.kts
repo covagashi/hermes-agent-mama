@@ -62,9 +62,8 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
 
     debugImplementation(libs.compose.ui.tooling)
-    // Declara ComponentActivity en el manifiesto debug → los tests Compose de
-    // Robolectric (createAndroidComposeRule) pueden lanzarla.
-    debugImplementation(libs.compose.ui.test.manifest)
+    // ComponentActivity la declara src/test/AndroidManifest.xml para todas las
+    // variantes → no hace falta compose.ui-test-manifest.
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
