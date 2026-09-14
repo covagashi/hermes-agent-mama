@@ -1,0 +1,61 @@
+# detekt — "Hermes para mamá".
+# Se aplica sobre la config por defecto (buildUponDefaultConfig = true); aquí sólo hay
+# desviaciones conscientes para Kotlin 2.x + Compose. Reglas duras del AGENTS.md
+# (sin GlobalScope, sin runBlocking en producción) quedan cubiertas por `coroutines`.
+
+build:
+    maxIssues: 0
+
+config:
+    validation: true
+
+console-reports:
+    active: true
+    exclude:
+        - 'ProjectStatisticsReport'
+        - 'ComplexityReport'
+        - 'NotificationReport'
+        - 'FindingsReport'
+        - 'FileBasedFindingsReport'
+        - 'LiteFindingsReport'
+
+# El formato lo gobierna ktlint (.editorconfig); detekt se centra en code smells
+# (el ruleset `formatting` no está en el classpath y no se puede desactivar aquí).
+
+naming:
+    FunctionNaming:
+        # Los composables usan PascalCase por convención.
+        ignoreAnnotated: [ 'Composable', 'Preview' ]
+
+style:
+    MagicNumber:
+        # Compose usa literales dp/sp constantemente; los tokens viven en el tema (C1).
+        active: false
+    MaxLineLength:
+        maxLineLength: 120
+    UnusedPrivateMember:
+        ignoreAnnotated: [ 'Preview' ]
+    ForbiddenMethodCall:
+        # Regla dura del área: sin runBlocking en producción (los tests usan TestScope).
+        active: true
+        methods:
+            - 'kotlinx.coroutines.runBlocking'
+        excludes: [ '**/src/test/**', '**/src/testDev/**', '**/src/androidTest/**' ]
+
+complexity:
+    LongParameterList:
+        functionThreshold: 10
+        constructorThreshold: 10
+        ignoreDefaultParameters: true
+        ignoreAnnotated: [ 'Composable' ]
+    TooManyFunctions:
+        thresholdInFiles: 15
+        thresholdInClasses: 20
+        thresholdInInterfaces: 12
+        thresholdInObjects: 15
+
+coroutines:
+    GlobalCoroutineUsage:
+        active: true
+    InjectDispatcher:
+        active: true

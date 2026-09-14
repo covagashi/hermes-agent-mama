@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reglas de backup para API ≤ 30. J2 las endurecerá junto a allowBackup. -->
+<full-backup-content />
