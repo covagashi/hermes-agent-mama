@@ -10,12 +10,14 @@ on:
     paths:
       - "apps/android/**"
       - "scripts/gen_android_contract.py"
+      - "apps/shared/src/gateway-contract.openrpc.json"
       - ".github/workflows/android.yml"
   pull_request:
     branches: [main]
     paths:
       - "apps/android/**"
       - "scripts/gen_android_contract.py"
+      - "apps/shared/src/gateway-contract.openrpc.json"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
