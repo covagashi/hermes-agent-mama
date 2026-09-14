@@ -1,0 +1,9 @@
+{
+  "session_id": "sess_7f2a1c",
+  "command_id": "cmd-a1b2c3",
+  "ok": true,
+  "result": {
+    "success": true
+  },
+  "error": "motivo de ejemplo"
+}

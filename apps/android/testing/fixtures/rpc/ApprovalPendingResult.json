@@ -1,0 +1,20 @@
+{
+  "approvals": [
+    {
+      "request_id": "req-42",
+      "command": "ls -la",
+      "description": "Descargar factura PDF",
+      "pattern_key": "terminal",
+      "pattern_keys": [
+        "ejemplo"
+      ],
+      "allow_permanent": true,
+      "allow_session": true,
+      "smart_denied": true,
+      "choices": [
+        "ejemplo"
+      ],
+      "tool_name": "browser_navigate"
+    }
+  ]
+}

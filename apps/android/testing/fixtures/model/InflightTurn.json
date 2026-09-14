@@ -1,0 +1,17 @@
+{
+  "assistant": "Aquí tienes…",
+  "streaming": true,
+  "user": "Hola, Hermes",
+  "corrections": [
+    "ejemplo"
+  ],
+  "correction_offsets": [
+    1
+  ],
+  "error": "ejemplo",
+  "status": "running",
+  "recoverable": true,
+  "error_surface": {
+    "detalle": "valor"
+  }
+}

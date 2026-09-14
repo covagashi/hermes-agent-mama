@@ -1,0 +1,9 @@
+{
+  "provider": "synthetic-provider",
+  "provider_label": "Proveedor de ejemplo",
+  "model": "synthetic-model",
+  "billing_url": "https://hermes.example.invalid/billing",
+  "is_nous": true,
+  "message": "Hermes está buscando la factura",
+  "unverified": true
+}

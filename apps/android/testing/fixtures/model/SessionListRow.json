@@ -1,0 +1,9 @@
+{
+  "id": "req-42",
+  "resolved_id": "sess_7f2a1c",
+  "title": "Factura de la tienda",
+  "preview": "Aquí tienes la factura…",
+  "started_at": 1.5,
+  "message_count": 42,
+  "source": "android"
+}

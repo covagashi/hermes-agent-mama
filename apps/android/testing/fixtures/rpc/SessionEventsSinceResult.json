@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "detalle": "valor"
+    }
+  ],
+  "latest_seq": 42,
+  "truncated": true,
+  "count": 42,
+  "epoch": "epoch-2026-09",
+  "open_requests": [
+    {
+      "id": "req-42",
+      "method": "approval",
+      "params": {
+        "detalle": "valor"
+      }
+    }
+  ]
+}

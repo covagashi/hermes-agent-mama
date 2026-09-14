@@ -1,0 +1,17 @@
+{
+  "role": "assistant",
+  "text": "Aquí tienes la factura del pedido.",
+  "timestamp": 1.5,
+  "row_id": 42,
+  "display_kind": "normal",
+  "display_metadata": {
+    "success": true
+  },
+  "name": "browser_navigate",
+  "context": "Pedidos de la tienda",
+  "args": {
+    "detalle": "valor"
+  },
+  "reasoning": "…",
+  "_unmodelled_extra": "se tolera pero no se preserva"
+}

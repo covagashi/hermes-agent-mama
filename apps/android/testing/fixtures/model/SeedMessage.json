@@ -1,0 +1,7 @@
+{
+  "role": "assistant",
+  "content": "ejemplo",
+  "text": "Aquí tienes la factura del pedido.",
+  "display_kind": "normal",
+  "_unmodelled_extra": "se tolera pero no se preserva"
+}

@@ -1,0 +1,6 @@
+{
+  "id": "req-42",
+  "slug": "tienda-ejemplo",
+  "name": "browser_navigate",
+  "primary_path": "/home/usuario/tienda"
+}

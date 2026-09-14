@@ -1,0 +1,18 @@
+{
+  "session_id": "sess_7f2a1c",
+  "action": "browser_click",
+  "surface": "android",
+  "selector": "#pedidos",
+  "title": "Factura de la tienda",
+  "text": "Aquí tienes la factura del pedido.",
+  "side": "left",
+  "steps": [
+    {
+      "selector": "#pedidos",
+      "title": "Factura de la tienda",
+      "text": "Aquí tienes la factura del pedido.",
+      "side": "left"
+    }
+  ],
+  "step_index": 42
+}

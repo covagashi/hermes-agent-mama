@@ -1,0 +1,10 @@
+{
+  "tool_id": "tool_0001",
+  "name": "browser_navigate",
+  "context": "Pedidos de la tienda",
+  "args": {
+    "detalle": "valor"
+  },
+  "args_text": "url=…",
+  "preview": "Aquí tienes la factura…"
+}

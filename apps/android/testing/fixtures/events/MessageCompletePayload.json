@@ -1,0 +1,53 @@
+{
+  "text": "Aquí tienes la factura del pedido.",
+  "usage": {
+    "model": "synthetic-model",
+    "input": 42,
+    "output": 42,
+    "reasoning": 42,
+    "prompt": 42,
+    "completion": 42,
+    "total": 42,
+    "calls": 42,
+    "compressions": 42,
+    "context_used": 42,
+    "context_max": 42,
+    "context_percent": 42,
+    "context_source": "estimate",
+    "context_estimated": true,
+    "cache_hit_pct": 42,
+    "cache_read": 42,
+    "cache_write": 42,
+    "avg_latency_s": 1.5,
+    "avg_tps": 1.5,
+    "active_subagents": 42,
+    "dev_credits_spent_micros": 42,
+    "cost_usd": 1.5,
+    "cost_status": "ok"
+  },
+  "status": "complete",
+  "reasoning": "…",
+  "warning": "aviso de ejemplo",
+  "response_previewed": true,
+  "billing": {
+    "provider": "synthetic-provider",
+    "provider_label": "Proveedor de ejemplo",
+    "model": "synthetic-model",
+    "billing_url": "https://hermes.example.invalid/billing",
+    "is_nous": true,
+    "message": "Hermes está buscando la factura",
+    "unverified": true
+  },
+  "failure_reason": "network",
+  "rendered": "**Factura**",
+  "error": "ejemplo",
+  "recoverable": true,
+  "error_surface": {
+    "layer": "ejemplo",
+    "code": "ejemplo",
+    "retryable": true,
+    "provider": "synthetic-provider",
+    "model": "synthetic-model"
+  },
+  "partial": true
+}

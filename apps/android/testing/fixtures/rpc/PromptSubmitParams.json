@@ -1,0 +1,18 @@
+{
+  "session_id": "sess_7f2a1c",
+  "profile": "default",
+  "text": "Aquí tienes la factura del pedido.",
+  "display_kind": "normal",
+  "interrupted": true,
+  "queued": true,
+  "surface": "android",
+  "voice_context": "dictado por voz",
+  "truncate_before_user_ordinal": 42,
+  "truncate_before_row_id": 42,
+  "truncate_before_message_id": "msg_9",
+  "confirm_truncate": true,
+  "confirm_empty_truncate": true,
+  "rebind_survivor_row_ids": [
+    1
+  ]
+}

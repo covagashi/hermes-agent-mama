@@ -1,0 +1,21 @@
+{
+  "session_id": "sess_7f2a1c",
+  "question": "¿Qué pedido quieres revisar?",
+  "choices": [
+    "ejemplo"
+  ],
+  "multi_select": true,
+  "questions": [
+    {
+      "qid": "q1",
+      "question": "¿Qué pedido quieres revisar?",
+      "choices": [
+        "ejemplo"
+      ],
+      "multi_select": true
+    }
+  ],
+  "answers": {
+    "ejemplo": "ejemplo"
+  }
+}
