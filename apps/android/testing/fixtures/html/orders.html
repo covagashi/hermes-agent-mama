@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- Fixture sintética F1 — "Tienda Ejemplo" (ROADMAP §7.2). Dominio ficticio:
+     hermes.example.invalid. Ningún dato real. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Mis pedidos — Tienda Ejemplo</title>
+  <style>
+    .estado { display: block; color: #555; }
+    .oculto { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="marca">Tienda Ejemplo</p>
+    <nav aria-label="Principal">
+      <a href="/">Inicio</a>
+      <a href="/pedidos">Pedidos</a>
+      <a href="/ayuda">Ayuda</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Mis pedidos</h1>
+    <p class="oculto">Este texto nunca debe aparecer en el snapshot</p>
+    <ul>
+      <li>
+        <a href="/pedidos/403-1234567">Pedido 403-1234567<span class="estado">Entregado el 3 de septiembre</span></a>
+        <button type="button">Descargar factura</button>
+      </li>
+      <li>
+        <a href="/pedidos/217-7654321">Pedido 217-7654321<span class="estado">En preparación</span></a>
+        <button type="button" disabled>Descargar factura</button>
+      </li>
+    </ul>
+    <form action="/buscar" method="get">
+      <label for="q">Buscar</label>
+      <input id="q" name="q" type="search">
+      <label for="orden">Ordenar por</label>
+      <select id="orden" name="orden">
+        <option value="fecha" selected>Más recientes</option>
+        <option value="importe">Mayor importe</option>
+      </select>
+      <label for="rec">Recordarme</label>
+      <input id="rec" type="checkbox" checked>
+      <button type="submit">Aplicar</button>
+    </form>
+  </main>
+</body>
+</html>

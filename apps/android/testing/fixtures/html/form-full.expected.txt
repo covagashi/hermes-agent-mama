@@ -1,0 +1,15 @@
+- main
+  - heading "Preferencias de aviso" [ref=e1] [level=1]
+  - form
+    - combobox "Canal de aviso" [ref=e2]
+      - option "Mensaje SMS" [ref=e3] [selected]
+      - option "Correo electrónico" [ref=e4]
+      - option "Llamada" [ref=e5]
+    - group
+      - text "Franja horaria"
+      - radio "Por la mañana" [ref=e6] [checked]
+      - radio "Por la tarde" [ref=e7]
+    - textbox "Notas para el repartidor \[opcional\]" [ref=e8]
+    - checkbox "Quiero la factura en papel" [ref=e9] [checked]
+    - checkbox "Enviarme ofertas" [ref=e10]
+    - button "Guardar" [ref=e11]

@@ -1,0 +1,13 @@
+{
+  "name": "hermes-snapshot-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Suite Node+jsdom de hermes_snapshot.js contra testing/fixtures/html (F1, ROADMAP §2.6).",
+  "scripts": {
+    "test": "node --test tests/",
+    "update": "node tests/update_expected.js"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

@@ -44,6 +44,7 @@ turbine = "1.2.1"
 mockk = "1.13.16"
 robolectric = "4.15.1"
 androidxTestRunner = "1.6.2"
+androidxTestCore = "1.7.0"
 androidxTestRules = "1.6.1"
 androidxTestExtJunit = "1.2.1"
 espresso = "3.6.1"
@@ -109,6 +110,7 @@ turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 mockk-android = { module = "io.mockk:mockk-android", version.ref = "mockk" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-rules = { module = "androidx.test:rules", version.ref = "androidxTestRules" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExtJunit" }

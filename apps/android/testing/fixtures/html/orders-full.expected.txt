@@ -1,0 +1,23 @@
+- text "Tienda Ejemplo"
+- navigation "Principal" [ref=e1]
+  - link "Inicio" [ref=e2]
+  - link "Pedidos" [ref=e3]
+  - link "Ayuda" [ref=e4]
+- main
+  - heading "Mis pedidos" [ref=e5] [level=1]
+  - list
+    - listitem
+      - link "Pedido 403-1234567" [ref=e6]
+        - text "Entregado el 3 de septiembre"
+      - button "Descargar factura" [ref=e7]
+    - listitem
+      - link "Pedido 217-7654321" [ref=e8]
+        - text "En preparación"
+      - button "Descargar factura" [ref=e9] [disabled]
+  - form
+    - textbox "Buscar" [ref=e10]
+    - combobox "Ordenar por" [ref=e11]
+      - option "Más recientes" [ref=e12] [selected]
+      - option "Mayor importe" [ref=e13]
+    - checkbox "Recordarme" [ref=e14] [checked]
+    - button "Aplicar" [ref=e15]

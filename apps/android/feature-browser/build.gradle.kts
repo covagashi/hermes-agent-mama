@@ -11,7 +11,12 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // Los fixtures HTML de F1 viajan como assets del APK de tests: el test
+    // instrumentado los carga en un WebView real (Robolectric no ejecuta JS).
+    sourceSets["androidTest"].assets.srcDir("../testing/fixtures/html")
 
     buildFeatures {
         compose = true
@@ -59,6 +64,11 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric).
     testRuntimeOnly(libs.junit.vintage.engine)
+
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 tasks.withType<Test>().configureEach {

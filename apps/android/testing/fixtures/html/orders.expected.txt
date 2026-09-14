@@ -1,0 +1,15 @@
+- text "Tienda Ejemplo"
+- link "Inicio" [ref=e1]
+- link "Pedidos" [ref=e2]
+- link "Ayuda" [ref=e3]
+- heading "Mis pedidos" [ref=e4] [level=1]
+- link "Pedido 403-1234567" [ref=e5]
+  - text "Entregado el 3 de septiembre"
+- button "Descargar factura" [ref=e6]
+- link "Pedido 217-7654321" [ref=e7]
+  - text "En preparación"
+- button "Descargar factura" [ref=e8] [disabled]
+- textbox "Buscar" [ref=e9]
+- combobox "Ordenar por" [ref=e10]
+- checkbox "Recordarme" [ref=e11] [checked]
+- button "Aplicar" [ref=e12]

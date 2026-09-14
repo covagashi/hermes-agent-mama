@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <!-- Activity mínima que hospeda el WebView bajo test (F1). -->
+        <activity
+            android:name="ai.hermes.mama.feature.browser.SnapshotTestActivity"
+            android:exported="false" />
+    </application>
+</manifest>
