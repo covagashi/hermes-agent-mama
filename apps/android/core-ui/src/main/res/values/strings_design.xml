@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings del sistema de diseño (C1): textos por defecto de los componentes
+     y ejemplos usados en previews/capturas. Todo en español, sin tecnicismos:
+     "sesión" → "chat", "gateway" → "Hermes" (ROADMAP §3). -->
+<resources>
+    <!-- TopBanner: franja que sólo aparece cuando falla la conexión. -->
+    <string name="design_banner_offline">Sin conexión. Reintentando…</string>
+    <!-- Botón de parada (icono ■) usado en Chat y en el Navegador. -->
+    <string name="design_stop">Parar</string>
+    <!-- Accesibilidad del botón 🔊 de las burbujas de Hermes. -->
+    <string name="design_listen_message">Escuchar este mensaje</string>
+    <!-- Chip de actividad: texto de reserva si llega una herramienta sin nombre. -->
+    <string name="design_chip_working">Hermes está trabajando…</string>
+
+    <!-- Ejemplos para previews y capturas de Roborazzi (datos ficticios). -->
+    <string name="design_example_new_chat">Nuevo chat</string>
+    <string name="design_example_yes">Sí, adelante</string>
+    <string name="design_example_no">No</string>
+    <string name="design_example_chip_web">Navegando por Tienda Ejemplo…</string>
+    <string name="design_example_empty_title">Aún no hay chats</string>
+    <string name="design_example_empty_body">Pulsa «Nuevo chat» y cuéntale a Hermes qué necesitas.</string>
+    <string name="design_example_bubble_user">Compré una lavadora la semana pasada y no encuentro la factura</string>
+    <string name="design_example_bubble_hermes">Voy a mirar en tu correo y en la tienda. Dame un minuto.</string>
+</resources>

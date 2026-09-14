@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ComponentActivity declarada para que ActivityScenario la resuelva en los
+     tests Robolectric/Roborazzi de TODAS las variantes (debug y release).
+     El overlay de manifiesto de unit tests no llega al AAR de la librería. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true" />
+    </application>
+</manifest>

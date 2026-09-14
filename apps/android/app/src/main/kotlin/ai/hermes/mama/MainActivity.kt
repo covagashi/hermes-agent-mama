@@ -1,5 +1,6 @@
 package ai.hermes.mama
 
+import ai.hermes.mama.core.ui.theme.MamaTheme
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
         DevGateway.onNewIntent(intent)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            MamaTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(
                         modifier =
@@ -58,7 +59,7 @@ class MainActivity : ComponentActivity() {
 @Preview(showBackground = true)
 @Composable
 private fun HermesPreview() {
-    MaterialTheme {
+    MamaTheme {
         Text(text = stringResource(R.string.app_name))
     }
 }
