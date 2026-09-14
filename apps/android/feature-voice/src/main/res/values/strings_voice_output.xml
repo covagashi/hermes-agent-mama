@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la salida de voz (TTS) de feature-voice — tarea D2.
+     Fichero separado de strings_voice.xml (D1, SpeechInput) para que los dos PRs
+     paralelos no colisionen; coordinación por nombre de fichero según AGENTS.md. -->
+<resources>
+    <!-- Palabra que el TTS pronuncia al encontrar un bloque de código. -->
+    <string name="tts_code_word">código</string>
+    <!-- Palabra que el TTS pronuncia en lugar de leer una URL carácter a carácter. -->
+    <string name="tts_link_word">enlace</string>
+</resources>
