@@ -84,6 +84,7 @@ dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
     implementation(project(":core-controller"))
+    implementation(project(":core-ui"))
     implementation(project(":feature-chat"))
     implementation(project(":feature-browser"))
     implementation(project(":feature-voice"))
