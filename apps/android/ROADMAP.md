@@ -381,7 +381,9 @@ tests. "JVM" = test unitario sin emulador; "Inst" = instrumentado en emulador.
   (keystores, `local.properties`), `README.md` con "cómo compilar en 3 comandos" **y el comando
   exacto para arrancar la app contra el FakeGateway**:
   `./gradlew :app:installDevDebug` +
-  `adb shell am start -n ai.hermes.mama.dev/.MainActivity --es fake_script <guion>`.
+  `adb shell am start -n ai.hermes.mama.dev/ai.hermes.mama.MainActivity --es fake_script <guion>`
+  (el componente va en FQCN: el `applicationId` lleva `.dev` pero la clase vive en el
+  namespace `ai.hermes.mama`; la forma corta `.MainActivity` NO resuelve).
   Mecanismo (sólo flavor `dev`): el extra `fake_script` hace que la app use como endpoint
   `ws://10.0.2.2:8399` (FakeGateway standalone de B5) en lugar de las credenciales guardadas;
   con la app vacía de A1 basta el override del endpoint — el guion real llega con B5.
