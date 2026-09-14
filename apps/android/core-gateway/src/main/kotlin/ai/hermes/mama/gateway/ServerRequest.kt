@@ -26,7 +26,7 @@ class ServerRequest internal constructor(
     val params: JsonObject,
     /** `true` si llegó re-entregada dentro de `open_requests` de un result (reconexión). */
     val replayed: Boolean,
-    private val sendResponseFrame: (JsonObject) -> Unit,
+    private val sendResponseFrame: (JsonObject) -> Boolean,
 ) {
     private val answered = AtomicBoolean(false)
 
@@ -36,13 +36,14 @@ class ServerRequest internal constructor(
 
     /**
      * Responde `{"jsonrpc":"2.0","id":…,"result":result}`. No es `suspend`: el envío
-     * corre en el scope del canal. Devuelve `false` si ya estaba respondida (no-op).
+     * corre en el scope del canal. Devuelve `false` si ya estaba respondida (no-op)
+     * o si el canal está muerto y nada va a salir por el cable.
      */
     fun respond(result: JsonElement): Boolean = sendOnce { put("result", result) }
 
     /**
      * Responde `{"jsonrpc":"2.0","id":…,"error":{code,message}}`. Devuelve `false`
-     * si ya estaba respondida (no-op).
+     * si ya estaba respondida (no-op) o si el canal está muerto.
      */
     fun fail(
         code: Int,
@@ -62,14 +63,13 @@ class ServerRequest internal constructor(
         if (!answered.compareAndSet(false, true)) {
             return false
         }
-        sendResponseFrame(
+        return sendResponseFrame(
             buildJsonObject {
                 put("jsonrpc", "2.0")
                 put("id", id)
                 body()
             },
         )
-        return true
     }
 }
 

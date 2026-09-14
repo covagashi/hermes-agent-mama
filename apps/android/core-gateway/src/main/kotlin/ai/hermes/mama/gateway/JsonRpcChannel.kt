@@ -5,7 +5,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -58,11 +61,13 @@ import kotlin.time.Duration.Companion.seconds
  * - `open_requests` dentro de un result (reconexión) se re-entregan como
  *   [ServerRequest] con `replayed = true` antes de resolver la llamada.
  * - Frames malformados o desconocidos → `logger`, nunca una excepción que mate
- *   el canal.
+ *   el canal. Por §8, los avisos llevan tipos/tamaños/ids numéricos, nunca
+ *   contenido del frame ni mensajes de excepción (pueden incrustar el input).
  *
  * Un canal == una generación de conexión: tras `onDead` hay que crear otro (la
  * reconexión con backoff es de B2, `ConnectionManager`). El [scope] gobierna el
- * lector, el heartbeat y los envíos de respuesta; al cancelarlo todo para.
+ * lector, el heartbeat y los envíos de respuesta; si el scope se cancela el canal
+ * muere con él: pendientes fallan y el transport se cierra.
  */
 class JsonRpcChannel(
     private val transport: Transport,
@@ -89,11 +94,15 @@ class JsonRpcChannel(
 
     // Una señal por respuesta correlacionada (pong o result/error). El watchdog
     // espera cada ventana de `heartbeatDeadline`; sin señal → canal muerto.
-    private val liveness = Channel<Unit>(capacity = Channel.CONFLATED)
+    private val liveness = Channel<Unit>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = EVENT_BUFFER_CAPACITY)
 
-    /** Eventos servidor→cliente (`method == "event"`). Sin suscriptores se descartan. */
+    /**
+     * Eventos servidor→cliente (`method == "event"`). `replay = 0`: los eventos
+     * recibidos sin suscriptores se descartan — B2 debe suscribirse ANTES de que
+     * llegue tráfico (p. ej. colectando con `CoroutineStart.UNDISPATCHED`).
+     */
     val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
     private val _serverRequests =
@@ -102,10 +111,12 @@ class JsonRpcChannel(
     /**
      * Toda petición servidor→cliente (también las reclamadas por un handler, para
      * observación). Quien la procesa la responde con [ServerRequest.respond]/[ServerRequest.fail].
+     * `replay = 0`: igual que [events], suscríbete antes de que llegue tráfico;
+     * una petición que nadie recoge recibe `-32601` automático.
      */
     val serverRequests: SharedFlow<ServerRequest> = _serverRequests.asSharedFlow()
 
-    /** `true` tras [close] o muerte por heartbeat/transporte. */
+    /** `true` tras [close] o muerte por heartbeat/transporte/scope. */
     val isClosed: Boolean
         get() = closed.get()
 
@@ -119,6 +130,11 @@ class JsonRpcChannel(
         readerJob = startReader()
         heartbeatJob = startHeartbeat()
         watchdogJob = startWatchdog()
+        // Si el scope muere por fuera (cancelación) el canal muere con él:
+        // pendientes fallan y el transport se cierra, no queda un canal zombi.
+        scope.coroutineContext[Job]?.invokeOnCompletion { cause ->
+            dead(ChannelClosedException("channel scope ended", cause))
+        }
     }
 
     /**
@@ -137,6 +153,9 @@ class JsonRpcChannel(
         val id = nextId.incrementAndGet()
         val deferred = CompletableDeferred<JsonElement>()
         pending[id] = deferred
+        // Carrera con dead(): si el canal murió entre requireOpen()/send y el
+        // registro, la llamada falla ya en vez de quedar huérfana hasta el timeout.
+        abortIfClosed(id)
         sendCallFrame(
             id,
             method,
@@ -146,6 +165,7 @@ class JsonRpcChannel(
                 put("params", params)
             },
         )
+        abortIfClosed(id)
         try {
             return withTimeout(timeout) { deferred.await() }
         } catch (e: TimeoutCancellationException) {
@@ -159,6 +179,13 @@ class JsonRpcChannel(
 
     private fun requireOpen() {
         if (closed.get()) {
+            throw ChannelClosedException()
+        }
+    }
+
+    private fun abortIfClosed(id: Long) {
+        if (closed.get()) {
+            pending.remove(id)
             throw ChannelClosedException()
         }
     }
@@ -201,12 +228,9 @@ class JsonRpcChannel(
         }
         failAllPending(ChannelClosedException())
         cancelJobs()
-        try {
-            transport.close()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logger("transport.close() falló: ${e.message}")
+        // NonCancellable: el socket se cierra aunque el llamador esté cancelado.
+        withContext(NonCancellable) {
+            closeTransportQuietly()
         }
     }
 
@@ -219,8 +243,14 @@ class JsonRpcChannel(
                 transport.incoming.collect { text -> router.handleFrame(text) }
                 dead(ChannelClosedException("transport incoming flow finished"))
             } catch (e: CancellationException) {
+                // El scope murió: el canal muere con él, marcado y cerrado.
+                dead(ChannelClosedException("channel scope cancelled", e))
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // También los Error (p. ej. StackOverflowError por JSON muy
+                // anidado) matan el canal de forma controlada, nunca en silencio.
+                // onDead recibe la causa real (IOException…); las llamadas
+                // pendientes la reciben ya envuelta en ChannelClosedException.
                 dead(e)
             }
         }
@@ -239,7 +269,7 @@ class JsonRpcChannel(
             try {
                 routeFrame(frame)
             } catch (e: Exception) {
-                logger("frame ignorado por error interno: ${e.message}")
+                warn("frame ignorado por error interno (${e::class.simpleName})")
             }
         }
 
@@ -248,12 +278,13 @@ class JsonRpcChannel(
                 try {
                     json.parseToJsonElement(text)
                 } catch (e: SerializationException) {
-                    // No se loguea el contenido: puede llevar datos sensibles.
-                    logger("frame JSON inválido ignorado: ${e.message}")
+                    // §8: el mensaje de JsonDecodingException incrusta el input;
+                    // se loguea tipo + tamaño, nunca el contenido del frame.
+                    warn("frame JSON inválido ignorado (${e::class.simpleName}, ${text.length} chars)")
                     null
                 }
             if (element != null && element !is JsonObject) {
-                logger("frame ignorado (no es objeto JSON)")
+                warn("frame ignorado (no es objeto JSON)")
             }
             return element as? JsonObject
         }
@@ -277,7 +308,7 @@ class JsonRpcChannel(
                 // Respuesta a una llamada o ping nuestros: id presente, sin method
                 method == null && id != null && id !is JsonNull -> dispatchResponse(id, frame)
 
-                else -> logger("frame desconocido ignorado (keys=${frame.keys})")
+                else -> warn("frame desconocido ignorado (${frame.keys.size} claves)")
             }
         }
 
@@ -287,7 +318,7 @@ class JsonRpcChannel(
         ) {
             val numericId = (id as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
             if (numericId == null) {
-                logger("respuesta con id no numérico ignorada: $id")
+                warn("respuesta con id no numérico ignorada")
             } else if (outstandingPings.remove(numericId)) {
                 liveness.trySend(Unit)
             } else {
@@ -301,19 +332,26 @@ class JsonRpcChannel(
         ) {
             val deferred = pending.remove(numericId)
             if (deferred == null) {
-                logger("respuesta sin llamada pendiente (id=$numericId)")
+                warn("respuesta sin llamada pendiente (id=$numericId)")
                 return
             }
             liveness.trySend(Unit)
             val error = frame[KEY_ERROR]
+            val result = frame[KEY_RESULT]
             if (error != null && error !is JsonNull) {
+                if (result != null && result !is JsonNull) {
+                    warn("respuesta con result y error a la vez: gana el error")
+                }
                 deferred.completeExceptionally(error.toRpcException())
             } else {
+                if (result == null) {
+                    warn("respuesta sin result ni error (id=$numericId): resuelta a null")
+                }
                 // Re-entrega de peticiones abiertas (reconexión): viajan en el
                 // result de session.resume / session.events.since, ANTES de
                 // resolver la llamada.
-                deliverOpenRequests(frame[KEY_RESULT])
-                deferred.complete(frame[KEY_RESULT] ?: JsonNull)
+                deliverOpenRequests(result)
+                deferred.complete(result ?: JsonNull)
             }
         }
 
@@ -324,7 +362,7 @@ class JsonRpcChannel(
                 val id = obj.stringOrNull("id")
                 val method = obj.stringOrNull("method")
                 if (obj == null || id == null || method == null) {
-                    logger("entrada open_requests malformada ignorada")
+                    warn("entrada open_requests malformada ignorada")
                     continue
                 }
                 dispatchServerRequest(id, method, obj[KEY_PARAMS] as? JsonObject ?: EMPTY_PARAMS, replayed = true)
@@ -335,20 +373,21 @@ class JsonRpcChannel(
             val params = paramsElement as? JsonObject
             val type = params.stringOrNull("type")
             if (params == null || type == null) {
-                logger("evento malformado ignorado")
+                warn("evento malformado ignorado")
                 return
             }
             val emitted =
                 _events.tryEmit(
                     GatewayEvent(
                         type = type,
-                        sessionId = params.stringOrNull("session_id"),
+                        // Los broadcasts del backend traen session_id "" (no lo omiten).
+                        sessionId = params.stringOrNull("session_id")?.takeIf { it.isNotEmpty() },
                         seq = params.longOrNull("seq"),
                         payload = params["payload"] ?: JsonNull,
                     ),
                 )
             if (!emitted) {
-                logger("evento descartado: buffer de eventos lleno (type=$type)")
+                warn("evento descartado: buffer de eventos lleno")
             }
         }
 
@@ -386,22 +425,31 @@ class JsonRpcChannel(
             try {
                 handler.accepts(request)
             } catch (e: Exception) {
-                logger("handler de server request lanzó (${request.method}): ${e.message}")
+                warn("handler de server request lanzó (${e::class.simpleName})")
                 false
             }
 
+        /**
+         * Encola la respuesta de una [ServerRequest]. Devuelve `false` si el canal
+         * está muerto: la petición queda respondida localmente pero nada sale por
+         * el cable (el backend ya no está escuchando).
+         */
         @Suppress("TooGenericExceptionCaught")
-        fun sendResponseFrame(frame: JsonObject) {
+        fun sendResponseFrame(frame: JsonObject): Boolean {
+            if (closed.get()) {
+                return false
+            }
             scope.launch {
                 try {
                     sendFrame(frame)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    logger("respuesta a petición del servidor no enviada: ${e.message}")
+                    warn("respuesta a petición del servidor no enviada (${e::class.simpleName})")
                     dead(e)
                 }
             }
+            return true
         }
     }
 
@@ -451,7 +499,12 @@ class JsonRpcChannel(
     }
 
     private fun startWatchdog(): Job? =
-        if (heartbeatDeadline <= Duration.ZERO) {
+        if (
+            heartbeatDeadline <= Duration.ZERO ||
+            heartbeatInterval <= Duration.ZERO ||
+            heartbeatInterval == Duration.INFINITE
+        ) {
+            // Sin pings no hay watchdog: un canal ocioso no debe morir a los 45 s.
             null
         } else {
             scope.launch {
@@ -478,25 +531,34 @@ class JsonRpcChannel(
         if (!closed.compareAndSet(false, true)) {
             return
         }
+        warn("canal muerto (${cause::class.simpleName})")
         failAllPending(cause)
         // Los bucles de heartbeat y watchdog salen solos al ver `closed`; el reader
         // puede quedar aparcado en `collect` para siempre, así que sí se cancela.
         // (dead() puede correr dentro del propio reader: cancelar un Job que ya
         // está terminando es inofensivo.)
         readerJob?.cancel()
-        scope.launch {
-            try {
-                transport.close()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                logger("transport.close() falló: ${e.message}")
-            }
+        // El scope puede estar ya cancelado: el cierre corre con un Job NUEVO
+        // (NonCancellable) sobre el mismo dispatcher del canal, no como hijo del
+        // scope muerto — así `transport.close()` siempre llega a ejecutarse.
+        CoroutineScope(scope.coroutineContext + NonCancellable).launch {
+            closeTransportQuietly()
         }
         try {
             onDead(cause)
         } catch (e: Exception) {
-            logger("onDead lanzó: ${e.message}")
+            warn("onDead lanzó (${e::class.simpleName})")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun closeTransportQuietly() {
+        try {
+            transport.close()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            warn("transport.close() falló (${e::class.simpleName})")
         }
     }
 
@@ -507,7 +569,11 @@ class JsonRpcChannel(
     }
 
     private fun failAllPending(cause: Throwable) {
-        pending.values.forEach { it.completeExceptionally(cause) }
+        // El KDoc de call() promete excepciones del canal: una causa cruda del
+        // transporte (IOException…) llega al await() como ChannelClosedException
+        // con la causa real encadenada (la cruda también va a onDead).
+        val failure = cause as? ChannelException ?: ChannelClosedException(cause = cause)
+        pending.values.forEach { it.completeExceptionally(failure) }
         pending.clear()
         outstandingPings.clear()
     }
@@ -517,6 +583,11 @@ class JsonRpcChannel(
             put("jsonrpc", JSON_RPC_VERSION)
             body()
         }
+
+    /** §8: el logger viene de fuera — un logger que lanza no puede tumbar el canal. */
+    private fun warn(message: String) {
+        runCatching { logger(message) }
+    }
 
     companion object {
         val DEFAULT_REQUEST_TIMEOUT: Duration = 120.seconds

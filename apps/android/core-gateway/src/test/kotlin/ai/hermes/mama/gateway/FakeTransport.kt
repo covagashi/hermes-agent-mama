@@ -57,6 +57,11 @@ class FakeTransport(
         _incoming.send(text)
     }
 
+    /** Falla el flujo entrante como un socket roto (IOException de OkHttp, por ejemplo). */
+    fun failIncoming(cause: Throwable) {
+        _incoming.close(cause)
+    }
+
     /** Los frames enviados, ya parseados. */
     fun sentFrames(): List<JsonObject> = sent.map { json.parseToJsonElement(it).jsonObject }
 

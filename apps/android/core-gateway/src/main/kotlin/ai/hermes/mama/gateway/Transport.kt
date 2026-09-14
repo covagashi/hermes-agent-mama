@@ -11,7 +11,16 @@ import kotlinx.coroutines.flow.Flow
  * garantiza que cada `send` lleva exactamente un frame completo.
  */
 interface Transport {
-    /** Envía un frame de texto (UTF-8 estricto: los contenidos llevan emoji/plano astral). */
+    /**
+     * Envía un frame de texto (UTF-8 estricto: los contenidos llevan emoji/plano
+     * astral). Contrato para implementaciones:
+     *
+     * - DEBE lanzar una excepción si el frame no se acepta. OkHttp `WebSocket.send`
+     *   devuelve `Boolean` en vez de lanzar: B2 lo mapeará (`false` → excepción).
+     * - NO debe suspender indefinidamente: el timeout de `JsonRpcChannel.call`
+     *   sólo cubre la espera de respuesta, no el envío. Un `send` que no vuelve
+     *   congela llamadas y heartbeat (B2 acotará el buffer de OkHttp).
+     */
     suspend fun send(text: String)
 
     /** Flujo de frames entrantes; al completar o fallar, el canal se da por muerto. */

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonElement
 data class GatewayEvent(
     /** `params.type` — p. ej. `message.delta`, `gateway.ready`, `tool.start`. */
     val type: String,
-    /** `params.session_id` — ausente en broadcasts sin sesión. */
+    /** `params.session_id` — `null` en broadcasts sin sesión (el backend envía `""`; el canal lo normaliza). */
     val sessionId: String? = null,
     /** `params.seq` — contador monótono por sesión (`event_replay`); nulo si no viene. */
     val seq: Long? = null,

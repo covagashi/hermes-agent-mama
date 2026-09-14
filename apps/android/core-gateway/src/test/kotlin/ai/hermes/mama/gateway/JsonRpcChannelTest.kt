@@ -4,8 +4,12 @@ import ai.hermes.mama.contract.EventTypes
 import ai.hermes.mama.contract.RpcMethods
 import ai.hermes.mama.contract.ServerRequests
 import app.cash.turbine.test
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -20,8 +24,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -499,6 +503,104 @@ class JsonRpcChannelTest {
             assertIs<ChannelClosedException>(
                 assertNotNull(runCatching { channel.call(RpcMethods.SESSION_LIST) }.exceptionOrNull()),
             )
+        }
+
+    @Test
+    fun `send que lanza mata el canal y call falla con ChannelClosedException`() =
+        runTest {
+            var deadCause: Throwable? = null
+            val transport = FakeTransport()
+            val channel = channel(transport, onDead = { deadCause = it })
+            transport.failOnSend = IOException("socket roto")
+
+            val error = assertNotNull(runCatching { channel.call(RpcMethods.SESSION_LIST) }.exceptionOrNull())
+            assertIs<ChannelClosedException>(error)
+            assertIs<IOException>(error.cause)
+            assertIs<IOException>(deadCause)
+            runCurrent()
+            assertTrue(channel.isClosed)
+            assertTrue(transport.closed, "dead() debe cerrar el transport")
+        }
+
+    @Test
+    fun `incoming que falla mata el canal y las pendientes reciben ChannelClosedException`() =
+        runTest {
+            var deadCause: Throwable? = null
+            val transport = FakeTransport()
+            val channel = channel(transport, onDead = { deadCause = it })
+
+            val call = async { runCatching { channel.call(RpcMethods.SESSION_LIST) } }
+            runCurrent()
+            assertEquals(1, transport.sentFrames().size)
+
+            transport.failIncoming(IOException("socket reset"))
+            runCurrent()
+
+            val error = assertNotNull(call.await().exceptionOrNull())
+            assertIs<ChannelClosedException>(error)
+            // La IOException cruda va encadenada bajo el ChannelClosedException.
+            // OJO: en la JVM de tests (-ea) kotlinx "recupera" la traza de la
+            // corrutina copiando la excepción — la copia lleva el original como
+            // cause — así que el aserto recorre toda la cadena, no sólo .cause.
+            assertTrue(
+                generateSequence<Throwable>(error) { it.cause }.any { it is IOException },
+                "la causa cruda del transporte va encadenada",
+            )
+            assertIs<IOException>(deadCause)
+            assertTrue(channel.isClosed)
+            assertTrue(transport.closed)
+        }
+
+    @Test
+    fun `cancelar el scope mata el canal cierra el transport y call falla rapido`() =
+        runTest {
+            var deadCause: Throwable? = null
+            val transport = FakeTransport()
+            // Scope propio sobre el dispatcher del test: podemos cancelarlo sin
+            // tocar el scope del test ni el tiempo virtual.
+            val channelScope = CoroutineScope(coroutineContext + SupervisorJob(coroutineContext[Job]))
+            val channel =
+                JsonRpcChannel(
+                    transport = transport,
+                    scope = channelScope,
+                    onDead = { deadCause = it },
+                )
+
+            val pendingCall = async { runCatching { channel.call(RpcMethods.SESSION_LIST) } }
+            runCurrent()
+            assertEquals(1, transport.sentFrames().size)
+
+            channelScope.cancel()
+            runCurrent()
+
+            assertTrue(channel.isClosed)
+            assertTrue(transport.closed, "el transport debe cerrarse aunque el scope muera")
+            assertIs<ChannelClosedException>(assertNotNull(deadCause))
+            assertIs<ChannelClosedException>(assertNotNull(pendingCall.await().exceptionOrNull()))
+
+            // Una llamada posterior falla al momento y NO emite ningún frame.
+            val error = assertNotNull(runCatching { channel.call(RpcMethods.SESSION_LIST) }.exceptionOrNull())
+            assertIs<ChannelClosedException>(error)
+            assertEquals(1, transport.sentFrames().size)
+        }
+
+    @Test
+    fun `respuesta duplicada con el mismo id se ignora y se loguea`() =
+        runTest {
+            val warnings = mutableListOf<String>()
+            val transport = FakeTransport(autoPong = true)
+            val channel = channel(transport, logger = { warnings += it })
+
+            val call = async { channel.call(RpcMethods.SESSION_LIST) }
+            runCurrent()
+            val id = idOf(transport.sentFrames().single())
+
+            transport.emit("""{"id":$id,"result":{"sessions":[]}}""")
+            transport.emit("""{"id":$id,"result":{"sessions":[]}}""")
+            runCurrent()
+
+            assertEquals(json.parseToJsonElement("""{"sessions":[]}"""), call.await())
+            assertTrue(warnings.any { it.contains("sin llamada pendiente") })
         }
 
     private companion object {
