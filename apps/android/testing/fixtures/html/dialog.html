@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Fixture sintética F1 — diálogos JS auto-resueltos (§2.6). Los tests inyectan
+     hermes_snapshot.js y luego pulsan los botones: alert→aceptar, confirm/prompt
+     →cancelar; el resultado queda anotado en el párrafo #res. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Avisos — Tienda Ejemplo</title>
+</head>
+<body>
+  <main>
+    <h1>Avisos de la tienda</h1>
+    <button id="aviso" type="button">Ver aviso</button>
+    <button id="confirmar" type="button">Confirmar borrado</button>
+    <button id="pregunta" type="button">Responder pregunta</button>
+    <p id="res"></p>
+  </main>
+  <script>
+    document.getElementById('aviso').addEventListener('click', function () {
+      alert('Su pedido llegará mañana');
+    });
+    document.getElementById('confirmar').addEventListener('click', function () {
+      var r = confirm('¿Borrar el pedido?');
+      document.getElementById('res').textContent += ' confirm=' + r;
+    });
+    document.getElementById('pregunta').addEventListener('click', function () {
+      var r = prompt('¿Cómo te llamas?');
+      document.getElementById('res').textContent += ' prompt=' + r;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+- main
+  - heading "Entrar en Tienda Ejemplo" [ref=e1] [level=1]
+  - text "Accede con tu cuenta de hermes.example.invalid"
+  - form
+    - textbox "Usuario" [ref=e2]
+    - textbox "Contraseña" [ref=e3] [password]
+    - button "Entrar" [ref=e4]
+  - link "¿Olvidaste tu contraseña?" [ref=e5]
+  - text "¿No tienes cuenta? Pídesela a tu familia."

@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Fixture sintética F1 — iframe same-origin. El contenido del iframe se rellena
+     por script (about:blank hereda el origen) para que funcione igual en jsdom y
+     en un WebView real sin servidor. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Detalle de pedido — Tienda Ejemplo</title>
+</head>
+<body>
+  <main>
+    <h1>Pedido 403-1234567</h1>
+    <p>Detalle del pedido.</p>
+    <iframe id="panel" title="Panel de ayuda"></iframe>
+  </main>
+  <script>
+    window.addEventListener('load', function () {
+      var doc = document.getElementById('panel').contentDocument;
+      var body = doc.body || doc.documentElement;
+      var p = doc.createElement('p');
+      p.textContent = '¿Necesitas ayuda con este pedido?';
+      var b = doc.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Abrir ayuda';
+      body.appendChild(p);
+      body.appendChild(b);
+    });
+  </script>
+</body>
+</html>

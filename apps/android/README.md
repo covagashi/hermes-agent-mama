@@ -75,6 +75,22 @@ pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
 - detekt: `config/detekt.yml` (sobre la config por defecto).
 - Android Lint: `config/lint.xml` compartido, `warningsAsErrors`.
 
+## JS del snapshot (F1)
+
+`core-controller/src/main/assets/hermes_snapshot.js` es el IIFE que la app
+inyecta en el WebView (`window.__hermes`, formato §2.6 del ROADMAP). Como
+`:core-controller` es JVM puro, el fichero se publica también en el classpath del
+jar (`SnapshotScript.load()`). Se testea con Node+jsdom contra las fixtures de
+`testing/fixtures/html/`:
+
+```bash
+cd core-controller/js && npm ci && npm test     # compara con *.expected.txt
+npm run update                                  # regenera los .expected.txt
+```
+
+Los mismos fixtures se verifican en un WebView real con
+`./gradlew :feature-browser:connectedDebugAndroidTest` (emulador).
+
 ## Flavors (ROADMAP §1.2)
 
 | Flavor | `applicationId` | Notas |

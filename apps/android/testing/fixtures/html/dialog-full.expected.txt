@@ -1,0 +1,9 @@
+- main
+  - heading "Avisos de la tienda" [ref=e1] [level=1]
+  - button "Ver aviso" [ref=e2]
+  - button "Confirmar borrado" [ref=e3]
+  - button "Responder pregunta" [ref=e4]
+  - text "confirm=false prompt=null"
+- dialog "Su pedido llegará mañana" [auto-dismissed]
+- dialog "¿Borrar el pedido?" [auto-dismissed]
+- dialog "¿Cómo te llamas?" [auto-dismissed]

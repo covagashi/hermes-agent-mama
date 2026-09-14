@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- Fixture sintética F1 — formulario con select, radios, checkboxes y textarea. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Preferencias — Tienda Ejemplo</title>
+</head>
+<body>
+  <main>
+    <h1>Preferencias de aviso</h1>
+    <form action="/preferencias" method="post">
+      <label for="canal">Canal de aviso</label>
+      <select id="canal" name="canal">
+        <option value="sms" selected>Mensaje SMS</option>
+        <option value="mail">Correo electrónico</option>
+        <option value="llamada">Llamada</option>
+      </select>
+      <fieldset>
+        <legend>Franja horaria</legend>
+        <label><input type="radio" name="franja" value="manana" checked> Por la mañana</label>
+        <label><input type="radio" name="franja" value="tarde"> Por la tarde</label>
+      </fieldset>
+      <label for="notas">Notas para el repartidor</label>
+      <textarea id="notas" name="notas" rows="3" placeholder="P. ej. llamar al timbre dos veces"></textarea>
+      <label><input type="checkbox" name="factura" checked> Quiero la factura en papel</label>
+      <label><input type="checkbox" name="ofertas"> Enviarme ofertas</label>
+      <button type="submit">Guardar</button>
+    </form>
+  </main>
+</body>
+</html>

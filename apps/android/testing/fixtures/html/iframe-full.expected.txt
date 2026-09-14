@@ -1,0 +1,6 @@
+- main
+  - heading "Pedido 403-1234567" [ref=e1] [level=1]
+  - text "Detalle del pedido."
+  - iframe "Panel de ayuda" [ref=e2]
+    - text "¿Necesitas ayuda con este pedido?"
+    - button "Abrir ayuda" [ref=e3]

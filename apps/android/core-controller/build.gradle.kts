@@ -5,9 +5,19 @@ plugins {
 
 // Lógica del controlador de navegador: snapshot builder + mapeo de acciones (M5).
 // JVM puro; el JS del snapshot vive en js/ con su suite Node/jsdom (F1).
+//
+// `src/main/assets/hermes_snapshot.js` se publica además en el classpath (raíz
+// del jar) para que la app lo cargue con `SnapshotScript.load()` sin depender de
+// Android assets — core-controller es un módulo JVM puro.
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+sourceSets {
+    main {
+        resources.srcDir("src/main/assets")
     }
 }
 
