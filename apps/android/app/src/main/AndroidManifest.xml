@@ -2,6 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- D1: dictado por voz (SpeechRecognizer). Se pide en runtime con explicación previa. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- API 30+: visibilidad de paquetes para SpeechRecognizer.isRecognitionAvailable. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <!-- J2 endurece: allowBackup=false, network_security_config, exported=false salvo MainActivity. -->
     <application

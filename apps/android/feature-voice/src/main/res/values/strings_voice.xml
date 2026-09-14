@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings del dictado por voz (feature-voice, tarea D1). Español, letra clara,
+     sin tecnicismos: la usuaria es una persona mayor. Un fichero por pantalla/área
+     (ROADMAP §4) para no chocar con PRs paralelos. -->
+<resources>
+    <!-- Micrófono: "mantener para hablar" (el botón lo pinta C5 con contentDescription) -->
+    <string name="voice_mic_description">Dictar un mensaje. Mantén pulsado y habla.</string>
+    <string name="voice_listening">Escuchando… Suelta para terminar.</string>
+
+    <!-- Permiso RECORD_AUDIO: explicación humana ANTES de la petición del sistema -->
+    <string name="voice_permission_rationale_title">Permiso de micrófono</string>
+    <string name="voice_permission_rationale">Hermes te escucha cuando mantienes pulsado el micrófono. Si no quieres dar el permiso, puedes seguir escribiendo tus mensajes.</string>
+    <string name="voice_permission_allow">Permitir micrófono</string>
+    <string name="voice_permission_not_now">Ahora no</string>
+    <string name="voice_permission_settings_hint">Para hablar con Hermes, permite el micrófono en los ajustes del móvil.</string>
+
+    <!-- Fallback: actividad de dictado del sistema cuando no hay servicio -->
+    <string name="voice_fallback_prompt">Habla ahora</string>
+
+    <!-- Modo alternativo cuando el micro no se puede usar: el botón queda en "Escribir" -->
+    <string name="voice_mode_write">Escribir</string>
+
+    <!-- Errores en lenguaje humano (uno por SpeechErrorKind, ver SpeechMessages.kt) -->
+    <string name="voice_error_permission_denied">No puedo escucharte sin el permiso de micrófono. Puedes escribir tu mensaje.</string>
+    <string name="voice_error_not_available">Este móvil no tiene dictado por voz. Puedes escribir tu mensaje.</string>
+    <string name="voice_error_no_match">No te he entendido. Inténtalo de nuevo.</string>
+    <string name="voice_error_audio">Hay un problema con el micrófono. Inténtalo de nuevo.</string>
+    <string name="voice_error_network">El dictado necesita conexión a internet. Inténtalo más tarde o escribe tu mensaje.</string>
+    <string name="voice_error_server">El servicio de voz no responde. Inténtalo más tarde.</string>
+    <string name="voice_error_busy">El micrófono está ocupado. Espera un poco e inténtalo de nuevo.</string>
+    <string name="voice_error_language">Este móvil no puede dictar en español. Puedes escribir tu mensaje.</string>
+    <string name="voice_error_unknown">No se ha podido dictar. Puedes escribir tu mensaje.</string>
+</resources>
