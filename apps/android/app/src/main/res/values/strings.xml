@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings globales. Cuando haya pantallas, cada una tiene su fichero:
+     strings_chats.xml, strings_chat.xml, … (ROADMAP §4) para evitar conflictos
+     entre PRs paralelos. -->
+<resources>
+    <string name="app_name">Hermes</string>
+</resources>

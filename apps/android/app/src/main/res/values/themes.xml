@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tema de plataforma mínimo; el sistema de diseño MamaTheme (tokens de
+     design/README.md) llega en C1. -->
+<resources>
+    <style name="Theme.HermesMama" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
