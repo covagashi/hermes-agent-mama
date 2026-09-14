@@ -42,6 +42,9 @@ kotlin {
 dependencies {
     implementation(project(":core-contract"))
 
+    implementation(libs.coroutines.core)
+    implementation(libs.timber)
+
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)
     implementation(libs.androidx.lifecycle.runtime.compose)
