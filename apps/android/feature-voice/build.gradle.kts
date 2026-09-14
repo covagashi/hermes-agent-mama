@@ -11,6 +11,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -42,6 +43,7 @@ kotlin {
 dependencies {
     implementation(project(":core-contract"))
 
+    implementation(libs.androidx.core.ktx)
     implementation(libs.coroutines.core)
     implementation(libs.timber)
 
@@ -56,9 +58,17 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // D1: tests de Intent/permiso real con sombras de Android (fallback RecognizerIntent).
+    testImplementation(libs.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric).
     testRuntimeOnly(libs.junit.vintage.engine)
+
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 tasks.withType<Test>().configureEach {
