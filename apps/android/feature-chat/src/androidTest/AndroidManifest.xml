@@ -10,5 +10,14 @@
         <activity
             android:name="androidx.activity.ComponentActivity"
             android:exported="true" />
+        <!-- Host mínimo para las pruebas Compose de Chats (C3). -->
+        <activity
+            android:name="ai.hermes.mama.feature.chat.chats.ChatsTestActivity"
+            android:exported="false" />
+        <!-- Demo de la pantalla Chats con FakeGateway en proceso (capturas de
+             emulador §7.1): `adb shell am start -n <pkg>.test/.chats.ChatsDemoActivity`. -->
+        <activity
+            android:name="ai.hermes.mama.feature.chat.chats.ChatsDemoActivity"
+            android:exported="true" />
     </application>
 </manifest>

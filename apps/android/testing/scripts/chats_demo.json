@@ -1,0 +1,51 @@
+{
+  "name": "chats_demo",
+  "description": "C3: los 4 chats del mockup Main.dc.html para capturas de emulador. Horas escalonadas (hoy, ayer, esta semana, hace 10 días) para que se vean todas las etiquetas de tiempo; 'demo_factura' entra viva (delete → 4023 como el real hasta su close).",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-chats-demo-1",
+  "sessions": [
+    {
+      "id": "demo_factura",
+      "runtime_id": "sess_factura",
+      "title": "Factura de la lavadora",
+      "preview": "He guardado la factura en Descargas",
+      "started_at": 1700000000.0,
+      "messages": [
+        { "role": "user", "text": "guarda la factura de la lavadora" },
+        { "role": "assistant", "text": "He guardado la factura en Descargas" }
+      ]
+    },
+    {
+      "id": "demo_correo",
+      "title": "Correo",
+      "preview": "Tienes 2 correos nuevos de la farmacia",
+      "started_at": 1699913600.0,
+      "messages": [
+        { "role": "assistant", "text": "Tienes 2 correos nuevos de la farmacia" }
+      ]
+    },
+    {
+      "id": "demo_recetas",
+      "title": "Recetas",
+      "preview": "Lentejas con verduras: 40 minutos",
+      "started_at": 1699740800.0,
+      "messages": [
+        { "role": "user", "text": "¿qué puedo cenar hoy?" },
+        { "role": "assistant", "text": "Lentejas con verduras: 40 minutos" }
+      ]
+    },
+    {
+      "id": "demo_medico",
+      "title": "Cita del médico",
+      "preview": "Miércoles 24 a las 9:30, lleva la tarjeta",
+      "started_at": 1699136000.0,
+      "messages": [
+        { "role": "assistant", "text": "Miércoles 24 a las 9:30, lleva la tarjeta" }
+      ]
+    }
+  ],
+  "turns": []
+}

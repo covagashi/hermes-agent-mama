@@ -52,6 +52,8 @@ roborazzi {
 dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
+    // C3: la lista de Chats se alimenta de SessionRepository (Room + red).
+    implementation(project(":core-storage"))
     implementation(project(":core-ui"))
     // C7: el micrófono de la tarjeta de pregunta usa SpeechInput (D1).
     implementation(project(":feature-voice"))
@@ -109,6 +111,8 @@ dependencies {
 
     // C7: flujo E2E instrumentado — FakeGateway (kotlin-jvm, corre en el
     // dispositivo) + la tarjeta real en Compose (misma pila que los tests JVM).
+    // C3: instrumentación de la pantalla Chats — host propio (ChatsTestActivity)
+    // y FakeGateway en proceso, sin red real (misma pila que feature-browser).
     androidTestImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
@@ -119,6 +123,10 @@ dependencies {
     // WebSocketTransport expone tipos okhttp en su firma (CookieJar/OkHttpClient).
     androidTestImplementation(libs.okhttp)
     androidTestImplementation(project(":testing"))
+    // §7.1: AccessibilityChecks también en el instrumentado (espresso → ATF).
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.espresso.accessibility)
+    androidTestImplementation(libs.a11y.test.framework)
 }
 
 tasks.withType<Test>().configureEach {
