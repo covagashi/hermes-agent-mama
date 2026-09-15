@@ -1,0 +1,33 @@
+{
+  "name": "approval",
+  "description": "El turno pide permiso (petición servidor→cliente 'approval' con id srq-*) y espera la respuesta Sí/No del cliente antes de completar.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-approval-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Vale, necesito tu permiso para esto." },
+        { "event": "tool.start", "payload": { "tool_id": "tool-ap-1", "name": "send_email", "context": "correo a la tienda" } },
+        {
+          "request": {
+            "method": "approval",
+            "params": {
+              "command": "send_email",
+              "description": "Enviar un correo a la tienda sobre tu pedido",
+              "tool_name": "send_email",
+              "choices": ["once", "deny"]
+            }
+          }
+        },
+        { "event": "tool.complete", "payload": { "tool_id": "tool-ap-1", "name": "send_email", "summary": "permiso respondido" } },
+        { "delta": "Respondiste: {{last_result.choice}}." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

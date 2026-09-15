@@ -1,0 +1,29 @@
+{
+  "name": "deltas",
+  "description": "Streaming con pausas, status.update y un tool.start/complete: para probar el indicador 'escribiendo', chips de actividad y el orden de seq.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-deltas-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "event": "status.update", "payload": { "kind": "loop", "text": "Hermes está escribiendo…" } },
+        { "delta": "Voy " },
+        { "sleep_ms": 60 },
+        { "delta": "a contarte " },
+        { "sleep_ms": 60 },
+        { "delta": "una cosa " },
+        { "sleep_ms": 60 },
+        { "delta": "muy importante: " },
+        { "tool": { "name": "web_search", "context": "Buscando en internet", "summary": "3 resultados", "sleep_ms": 80 } },
+        { "delta": "todo va bien." },
+        { "event": "status.update", "payload": { "kind": "loop", "text": "" } },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}
