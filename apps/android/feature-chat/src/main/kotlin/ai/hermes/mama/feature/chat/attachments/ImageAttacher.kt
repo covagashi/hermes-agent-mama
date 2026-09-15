@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.Base64
@@ -25,6 +26,14 @@ internal const val IMAGE_MAX_DIMENSION = 1600
 /** Tope del payload final: "≤ 1 MB" del roadmap, interpretado como 1 MiB. */
 internal const val IMAGE_MAX_BYTES = 1024 * 1024
 
+/**
+ * Tope del fichero de ENTRADA leído del provider: el del backend
+ * (`_ATTACH_BYTES_MAX_BYTES` = 25 MiB en `prompt_attachments.py`). La foto de
+ * origen puede ser mayor que el payload (se recomprime), pero un stream más
+ * allá de este tope no se volcaría entero a memoria — se lee con cota.
+ */
+internal const val IMAGE_MAX_SOURCE_BYTES = 25 * 1024 * 1024
+
 /** Caracteres admitidos en el nombre de fichero enviado al gateway. */
 private val SAFE_FILENAME = Regex("[^A-Za-z0-9_-]")
 
@@ -35,6 +44,14 @@ private val SAFE_FILENAME = Regex("[^A-Za-z0-9_-]")
 fun interface ImageStreamSource {
     @Throws(IOException::class)
     fun open(uri: Uri): InputStream?
+
+    /**
+     * Tamaño que declara el provider antes de leer (en la app,
+     * `AssetFileDescriptor.getLength` vía [ContentResolver.openAssetFileDescriptor]);
+     * `null` o negativo = desconocido. [ImageAttacher] lo usa para rechazar
+     * ficheros por encima de [IMAGE_MAX_SOURCE_BYTES] sin volcarlos a memoria.
+     */
+    fun size(uri: Uri): Long? = null
 }
 
 /** Envía el payload de `image.attach_bytes` (ROADMAP §2.3) — en la app es [GatewayClient.attachImage]. */
@@ -48,7 +65,16 @@ fun interface AttachedImageSender {
 
 /** Resultado de [ImageAttacher.attach]: el DTO del backend o un error para texto humano. */
 sealed interface ImageAttachOutcome {
-    /** `image.attach_bytes` respondió; la foto queda a la cola del siguiente `prompt.submit`. */
+    /**
+     * `image.attach_bytes` respondió; la foto queda a la cola del siguiente
+     * `prompt.submit`.
+     *
+     * OJO (C5): `response.name` es el nombre que el backend genera al encolar
+     * (`upload_<ts>_<n>.<ext>`, ver `_queue_attached_image` en
+     * `prompt_attachments.py`), NO el nombre local del dispositivo — la
+     * etiqueta del chip en la UI sale del `displayName` local del picker,
+     * no de este campo.
+     */
     data class Attached(
         val response: AttachedImageResult,
     ) : ImageAttachOutcome
@@ -79,10 +105,11 @@ enum class ImageAttachError {
  * [Uri] de contenido y la manda por `image.attach_bytes` para que se adjunte al
  * siguiente `prompt.submit`.
  *
- * Pipeline: lee los bytes → puerta de magic bytes ([looksLikeImage]) →
- * orientación EXIF aplicada a los píxeles → lado mayor ≤ [IMAGE_MAX_DIMENSION] →
- * JPEG salvo que haya transparencia real (PNG) → recompresión iterativa hasta
- * [IMAGE_MAX_BYTES] ([compressToFit]) → base64.
+ * Pipeline: tamaño declarado / lectura con cota ([IMAGE_MAX_SOURCE_BYTES]) →
+ * puerta de magic bytes ([looksLikeImage]) → orientación EXIF aplicada a los
+ * píxeles → lado mayor ≤ [IMAGE_MAX_DIMENSION] → JPEG salvo que haya
+ * transparencia real (PNG) → recompresión iterativa hasta [IMAGE_MAX_BYTES]
+ * ([compressToFit]) → base64.
  *
  * Toda la preparación corre en [ioDispatcher]; la clase no guarda estado.
  */
@@ -100,7 +127,15 @@ class ImageAttacher(
         gateway: GatewayClient,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : this(
-        streamSource = ImageStreamSource(contentResolver::openInputStream),
+        streamSource =
+            object : ImageStreamSource {
+                override fun open(uri: Uri): InputStream? = contentResolver.openInputStream(uri)
+
+                override fun size(uri: Uri): Long? =
+                    contentResolver
+                        .openAssetFileDescriptor(uri, "r")
+                        ?.use { it.length.takeIf { length -> length >= 0 } }
+            },
         sender =
             AttachedImageSender { sessionId, contentBase64, filename ->
                 gateway.attachImage(sessionId = sessionId, contentBase64 = contentBase64, filename = filename)
@@ -126,9 +161,15 @@ class ImageAttacher(
                 is PrepareResult.Failed -> return ImageAttachOutcome.Failed(prepared.error)
             }
         return try {
-            ImageAttachOutcome.Attached(
-                sender.send(sessionId, image.contentBase64, image.filename),
-            )
+            val response = sender.send(sessionId, image.contentBase64, image.filename)
+            if (response.attached) {
+                ImageAttachOutcome.Attached(response)
+            } else {
+                // El backend responde {attached:false, message} cuando no pudo
+                // encolar la imagen (mismo shape que clipboard.paste).
+                Timber.w("image.attach_bytes respondió attached=false")
+                ImageAttachOutcome.Failed(ImageAttachError.SendFailed)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -162,9 +203,57 @@ class ImageAttacher(
         uri: Uri,
         displayName: String?,
     ): PrepareResult =
-        readBytes(uri)
-            ?.let { raw -> prepareFromBytes(uri, displayName, raw) }
-            ?: PrepareResult.Failed(ImageAttachError.Unreadable)
+        when (val read = readSourceBytes(uri)) {
+            is ReadResult.Ok -> prepareFromBytes(uri, displayName, read.bytes)
+            is ReadResult.Failed -> PrepareResult.Failed(read.error)
+        }
+
+    /** Resultado de leer el Uri: bytes acotados o el error humano correspondiente. */
+    private sealed interface ReadResult {
+        data class Ok(
+            val bytes: ByteArray,
+        ) : ReadResult
+
+        data class Failed(
+            val error: ImageAttachError,
+        ) : ReadResult
+    }
+
+    /**
+     * Doble cota anti-OOM: si el provider declara tamaño
+     * ([ImageStreamSource.size]) y pasa de [IMAGE_MAX_SOURCE_BYTES] se rechaza
+     * sin abrir; si no declara (o miente), la lectura va acotada y corta.
+     */
+    private fun readSourceBytes(uri: Uri): ReadResult =
+        if (isDeclaredOverLimit(uri)) {
+            ReadResult.Failed(ImageAttachError.TooLarge)
+        } else {
+            readBytes(uri)?.let { raw ->
+                if (raw.size > IMAGE_MAX_SOURCE_BYTES) {
+                    Timber.w("imagen rechazada: supera %d bytes al leer", IMAGE_MAX_SOURCE_BYTES)
+                    ReadResult.Failed(ImageAttachError.TooLarge)
+                } else {
+                    ReadResult.Ok(raw)
+                }
+            } ?: ReadResult.Failed(ImageAttachError.Unreadable)
+        }
+
+    /** ¿El provider declara un tamaño por encima de [IMAGE_MAX_SOURCE_BYTES]? Fallo al consultar → `false`. */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException") // providers lanzan cualquier RuntimeException
+    private fun isDeclaredOverLimit(uri: Uri): Boolean =
+        try {
+            (streamSource.size(uri) ?: -1L).let { declared ->
+                (declared > IMAGE_MAX_SOURCE_BYTES).also { over ->
+                    if (over) {
+                        Timber.w("imagen rechazada por tamaño declarado (%d bytes)", declared)
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
 
     /** Magic bytes → bounds → decode; cualquier fallo de imagen es [ImageAttachError.NotAnImage]. */
     private fun prepareFromBytes(
@@ -191,15 +280,16 @@ class ImageAttacher(
         // Bitmaps creados en el pipeline — se reciclan al acabar (la foto puede ser de MP altos).
         val pool = linkedSetOf(decoded)
         return try {
-            val oriented = decoded.withExifOrientation(exifOrientation(raw)).also(pool::add)
-            // PNG sólo si hay transparencia REAL en los píxeles: JPEG no la soporta
-            // (y un PNG/WebP opaco comprime mucho mejor como JPEG).
+            // El chequeo de transparencia va sobre `decoded`: las 8 variantes
+            // EXIF sólo reordenan píxeles (misma cobertura alfa) y así el
+            // escaneo corre sobre el bitmap recién decodificado.
             val format =
-                if (oriented.hasTransparentPixels()) {
+                if (decoded.hasTransparentPixels()) {
                     Bitmap.CompressFormat.PNG
                 } else {
                     Bitmap.CompressFormat.JPEG
                 }
+            val oriented = decoded.withExifOrientation(exifOrientation(raw)).also(pool::add)
             val sized = oriented.scaledToMax(IMAGE_MAX_DIMENSION).also(pool::add)
             compressToFit(sized, format, pool)
                 ?.let { bytes ->
@@ -211,10 +301,14 @@ class ImageAttacher(
         }
     }
 
+    /**
+     * Lee el stream con cota [IMAGE_MAX_SOURCE_BYTES] + 1: nunca vuelca un
+     fichero gigante entero a memoria. El byte de más es la señal de "pasado".
+     */
     @Suppress("TooGenericExceptionCaught") // providers lanzan cualquier RuntimeException
     private fun readBytes(uri: Uri): ByteArray? =
         try {
-            streamSource.open(uri)?.use { it.readBytes() }
+            streamSource.open(uri)?.use { it.readAtMost(IMAGE_MAX_SOURCE_BYTES + 1) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -275,3 +369,21 @@ class ImageAttacher(
         return "$base$extension"
     }
 }
+
+/** Lee hasta [limit] bytes del stream (sin OOM: un fichero de 100+MB no se vuelca). */
+private fun InputStream.readAtMost(limit: Int): ByteArray {
+    val out = ByteArrayOutputStream(minOf(limit, READ_BUFFER_SIZE))
+    val buffer = ByteArray(READ_BUFFER_SIZE)
+    var remaining = limit
+    while (remaining > 0) {
+        val read = read(buffer, 0, minOf(buffer.size, remaining))
+        if (read < 0) {
+            break
+        }
+        out.write(buffer, 0, read)
+        remaining -= read
+    }
+    return out.toByteArray()
+}
+
+private const val READ_BUFFER_SIZE = 8 * 1024

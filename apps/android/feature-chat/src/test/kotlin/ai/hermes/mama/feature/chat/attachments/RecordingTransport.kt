@@ -17,11 +17,15 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * [Transport] en memoria para los tests de [ImageAttacher]: graba cada frame y
- * responde `image.attach_bytes` con `{attached:true, name:<filename>}` — eco del
- * param enviado, como hace `_attached_image_result` en `methods_prompt.py`.
+ * responde `image.attach_bytes` con el shape real del backend:
+ * `{attached:true, name:"upload_<ts>_<n>.<ext>", …}` — `_queue_attached_image`
+ * en `prompt_attachments.py` genera el nombre en el servidor (NO devuelve el
+ * `filename` del cliente); la extensión la saca del filename enviado, como
+ * `_sniff_image_ext`.
  *
- * [failOnSend] simula un socket roto y [rpcErrorOnAttach] una respuesta
- * JSON-RPC de error: ambos deben acabar en [ImageAttachError.SendFailed].
+ * [failOnSend] simula un socket roto, [rpcErrorOnAttach] una respuesta
+ * JSON-RPC de error y [attachedFalse] un `{attached:false}` — los tres deben
+ * acabar en [ImageAttachError.SendFailed].
  */
 class RecordingTransport(
     private val json: Json = Json { ignoreUnknownKeys = true },
@@ -31,11 +35,16 @@ class RecordingTransport(
     private val _incoming = Channel<String>(capacity = Channel.UNLIMITED)
     override val incoming: Flow<String> = _incoming.receiveAsFlow()
 
+    private var attachCount = 0
+
     @Volatile
     var failOnSend: Throwable? = null
 
     @Volatile
     var rpcErrorOnAttach: Boolean = false
+
+    @Volatile
+    var attachedFalse: Boolean = false
 
     override suspend fun send(text: String) {
         failOnSend?.let { throw it }
@@ -62,20 +71,30 @@ class RecordingTransport(
                     )
                 }
             } else {
-                val filename =
+                attachCount++
+                // El backend nombra upload_<ts>_<counter>.<ext> y la ext sale
+                // del filename del cliente (_sniff_image_ext) — no devuelve
+                // el nombre original tal cual.
+                val ext =
                     frame["params"]
                         ?.jsonObject
                         ?.get("filename")
                         ?.jsonPrimitive
                         ?.contentOrNull
+                        ?.substringAfterLast('.', "")
+                        ?.let { if (it.isBlank()) ".png" else ".$it" }
+                        ?: ".png"
                 buildJsonObject {
                     put("jsonrpc", "2.0")
                     put("id", id)
                     put(
                         "result",
                         buildJsonObject {
-                            put("attached", true)
-                            put("name", filename)
+                            put("attached", !attachedFalse)
+                            put("name", "upload_20260101_000000_$attachCount$ext")
+                            if (attachedFalse) {
+                                put("message", "could not queue image")
+                            }
                         },
                     )
                 }

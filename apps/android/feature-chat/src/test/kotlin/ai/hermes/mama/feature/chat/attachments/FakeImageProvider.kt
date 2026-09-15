@@ -15,7 +15,9 @@ import java.util.concurrent.ConcurrentHashMap
  * punta (ROADMAP §7.3: contratos de comportamiento).
  *
  * - nombre ausente → [FileNotFoundException] (Uri ilegible);
- * - nombre [NAME_NULL_STREAM] → descriptor `null` (provider que no devuelve nada).
+ * - nombre [NAME_NULL_STREAM] → descriptor `null` (provider que no devuelve nada);
+ * - [declaredLengths] declara un tamaño distinto al del payload real (un
+ *   provider que miente o un fichero gigante sin materializar en el test).
  */
 class FakeImageProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
@@ -27,7 +29,11 @@ class FakeImageProvider : ContentProvider() {
         if (uri.lastPathSegment == NAME_NULL_STREAM) {
             return null
         }
-        return super.openAssetFile(uri, mode)
+        // Como un provider real respaldado por fichero, el AFD declara el
+        // tamaño: el de `declaredLengths` si está (fichero gigante sin
+        // materializarlo), si no el del payload registrado.
+        val declared = declaredLengths[uri.lastPathSegment] ?: payloads[uri.lastPathSegment]?.size?.toLong()
+        return AssetFileDescriptor(openFile(uri, mode), 0, declared ?: AssetFileDescriptor.UNKNOWN_LENGTH)
     }
 
     override fun openFile(
@@ -42,6 +48,7 @@ class FakeImageProvider : ContentProvider() {
                 ?: throw FileNotFoundException("provider sin context")
         val file = File.createTempFile("fake-image", ".bin", cacheDir)
         file.writeBytes(data)
+        file.deleteOnExit()
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
@@ -79,6 +86,9 @@ class FakeImageProvider : ContentProvider() {
 
         /** `lastPathSegment` → bytes que servirá el provider. */
         val payloads = ConcurrentHashMap<String, ByteArray>()
+
+        /** `lastPathSegment` → tamaño que declarará vía `AssetFileDescriptor.getLength`. */
+        val declaredLengths = ConcurrentHashMap<String, Long>()
 
         fun uri(name: String): Uri = Uri.parse("content://$AUTHORITY/$name")
 

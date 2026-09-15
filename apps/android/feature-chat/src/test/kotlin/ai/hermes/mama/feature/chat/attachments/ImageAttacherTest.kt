@@ -22,6 +22,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.IOException
+import java.io.InputStream
+import java.util.Arrays
 import java.util.Base64
 import kotlin.math.max
 import kotlin.time.Duration.Companion.minutes
@@ -43,6 +45,7 @@ class ImageAttacherTest {
     fun setUp() {
         FakeImageProvider.register()
         FakeImageProvider.payloads.clear()
+        FakeImageProvider.declaredLengths.clear()
     }
 
     private fun TestScope.newAttacher(transport: RecordingTransport): ImageAttacher {
@@ -166,6 +169,21 @@ class ImageAttacherTest {
         }
 
     @Test
+    fun `png con banda transparente fina se mantiene png`() =
+        runTest {
+            // Banda de 4px en x=601..604: con la antigua rejilla (paso 6 para
+            // 1100x600) caía entre muestreos y salía JPEG por error.
+            val transport = RecordingTransport()
+            val uri = register("banda.png", ImageFixtures.alphaBandPng(1100, 600, bandWidth = 4, bandStart = 601))
+
+            val outcome = newAttacher(transport).attach("session-1", uri)
+
+            assertTrue(outcome is ImageAttachOutcome.Attached)
+            val sent = sentBytes(transport)
+            assertTrue("la banda alfa debe mantener el PNG", sent.hasMagicPrefix(ImageFixtures.PNG_MAGIC))
+        }
+
+    @Test
     fun `png sin transparencia se convierte a jpeg`() =
         runTest {
             val transport = RecordingTransport()
@@ -209,10 +227,13 @@ class ImageAttacherTest {
             // Sin displayName se usa el lastPathSegment con la extensión real.
             assertEquals("vacaciones-9.jpg", params.getValue("filename").jsonPrimitive.content)
             assertTrue(sentBytes(transport).isNotEmpty())
-            // El result eco del backend llega al caller.
+            // El result del backend llega al caller; el name lo genera el
+            // servidor (upload_<ts>_<n>.<ext>), NO el filename del cliente.
             val attached = outcome as ImageAttachOutcome.Attached
             assertEquals(true, attached.response.attached)
-            assertEquals("vacaciones-9.jpg", attached.response.name)
+            val name = attached.response.name
+            assertTrue("esperaba nombre upload_* del backend, llegó $name", name?.startsWith("upload_") == true)
+            assertTrue(name?.endsWith(".jpg") == true)
         }
 
     @Test
@@ -289,10 +310,86 @@ class ImageAttacherTest {
         }
 
     @Test
+    fun `respuesta attached false del servidor da SendFailed`() =
+        runTest {
+            // {attached:false, message} es el shape del backend cuando no pudo
+            // encolar la imagen (clipboard.paste lo devuelve igual).
+            val transport = RecordingTransport()
+            transport.attachedFalse = true
+            val uri = register("foto.jpg", ImageFixtures.noiseJpeg(100, 80))
+
+            val outcome = newAttacher(transport).attach("session-1", uri)
+
+            assertEquals(ImageAttachOutcome.Failed(ImageAttachError.SendFailed), outcome)
+        }
+
+    @Test
+    fun `fichero que declara 50MB da TooLarge sin volcarlo a memoria`() =
+        runTest {
+            // Provider que declara un tamaño gigante (AssetFileDescriptor.length)
+            // aunque el payload físico sea pequeño: rechazo temprano por tamaño.
+            val transport = RecordingTransport()
+            val uri = register("gigante.jpg", ImageFixtures.noiseJpeg(100, 80))
+            FakeImageProvider.declaredLengths["gigante.jpg"] = 50L * 1024 * 1024
+
+            val outcome = newAttacher(transport).attach("session-1", uri)
+
+            assertEquals(ImageAttachOutcome.Failed(ImageAttachError.TooLarge), outcome)
+            assertTrue(transport.sent.isEmpty())
+        }
+
+    @Test
+    fun `stream gigante sin tamano declarado se lee con cota y da TooLarge`() =
+        runTest {
+            // Stream que rinde 40MB sin materializarlos: la lectura con cota
+            // debe parar en IMAGE_MAX_SOURCE_BYTES+1 — nunca un readBytes()
+            // entero (OOM).
+            val endless = EndlessStream(remaining = 40L * 1024 * 1024)
+            val attacher =
+                ImageAttacher(
+                    streamSource = ImageStreamSource { endless },
+                    sender =
+                        AttachedImageSender { _, _, _ ->
+                            throw AssertionError("no debe llegar a enviar")
+                        },
+                    ioDispatcher = UnconfinedTestDispatcher(),
+                )
+
+            val outcome = attacher.attach("session-1", FakeImageProvider.uri("gigante.jpg"))
+
+            assertEquals(ImageAttachOutcome.Failed(ImageAttachError.TooLarge), outcome)
+            assertTrue(
+                "se leyó más de la cota (${endless.remaining} bytes sin consumir)",
+                endless.remaining > 0,
+            )
+        }
+
+    @Test
     fun `cada ImageAttachError tiene texto humano en strings`() {
         for (kind in ImageAttachError.entries) {
             val message = kind.humanMessage(context)
             assertTrue("$kind sin texto", message.isNotBlank())
         }
+    }
+}
+
+/** Stream que rinde [remaining] bytes de relleno sin materializarlos (OOM-test). */
+private class EndlessStream(
+    var remaining: Long,
+) : InputStream() {
+    override fun read(): Int = if (remaining-- > 0) 0xFF else -1
+
+    override fun read(
+        b: ByteArray,
+        off: Int,
+        len: Int,
+    ): Int {
+        if (remaining <= 0) {
+            return -1
+        }
+        val n = minOf(len.toLong(), remaining).toInt()
+        Arrays.fill(b, off, off + n, 0xFF.toByte())
+        remaining -= n
+        return n
     }
 }

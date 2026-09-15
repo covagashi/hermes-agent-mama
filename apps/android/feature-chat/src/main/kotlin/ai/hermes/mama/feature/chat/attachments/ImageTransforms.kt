@@ -19,9 +19,6 @@ private const val SHRINK_FACTOR = 0.7f
 private const val MAX_SHRINK_ROUNDS = 8
 private const val MIN_SHORT_SIDE = 480
 
-/** Densidad de la rejilla para detectar píxeles translúcidos (~96×96 muestreos). */
-private const val ALPHA_SAMPLE_GRID = 96
-
 /** Aplica la orientación EXIF a los píxeles (las 8 variantes); normal/ilegible → mismo bitmap. */
 internal fun Bitmap.withExifOrientation(orientation: Int): Bitmap {
     val matrix = Matrix()
@@ -46,22 +43,20 @@ internal fun Bitmap.withExifOrientation(orientation: Int): Bitmap {
 }
 
 /**
- * ¿Hay píxeles translúcidos de verdad? Se muestrea una rejilla en vez de
- * `hasAlpha()`: un PNG con canal alfa pero todo opaco comprime mejor como
- * JPEG (y `hasAlpha` no es fiable en algunos entornos de test).
+ * ¿Hay píxeles translúcidos de verdad? Escaneo DENSO por filas con
+ * [Bitmap.getPixels] (copia nativa por bloques, no un JNI por píxel): una
+ * rejilla podía saltarse una banda alfa de pocos px, y `hasAlpha()` no es
+ * fiable — un PNG con canal alfa pero todo opaco comprime mejor como JPEG.
  */
 internal fun Bitmap.hasTransparentPixels(): Boolean {
-    val step = max(1, min(width, height) / ALPHA_SAMPLE_GRID)
-    var y = 0
-    while (y < height) {
-        var x = 0
-        while (x < width) {
-            if (getPixel(x, y) ushr 24 != 0xFF) {
+    val row = IntArray(width)
+    for (y in 0 until height) {
+        getPixels(row, 0, width, 0, y, width, 1)
+        for (pixel in row) {
+            if (pixel ushr 24 != 0xFF) {
                 return true
             }
-            x += step
         }
-        y += step
     }
     return false
 }

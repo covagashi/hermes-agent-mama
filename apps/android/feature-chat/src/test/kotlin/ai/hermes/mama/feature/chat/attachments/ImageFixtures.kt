@@ -78,6 +78,36 @@ object ImageFixtures {
         return out.toByteArray()
     }
 
+    /**
+     * PNG opaco con una banda vertical transparente de [bandWidth] px — el caso
+     * que una rejilla de muestreo podía saltarse: la banda debe detectarse
+     * igualmente y la salida seguir siendo PNG.
+     */
+    fun alphaBandPng(
+        width: Int,
+        height: Int,
+        bandWidth: Int,
+        bandStart: Int = width / 3,
+    ): ByteArray {
+        // Fondo plano (PNG de ruido no cabría en 1MB) + banda alfa a 0; filas
+        // escritas con setPixels como noiseBitmap (setPixel a pelo no llega al
+        // buffer que comprime Robolectric).
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val row = IntArray(width)
+        val bandEnd = (bandStart + bandWidth).coerceAtMost(width)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val alpha = if (x in bandStart until bandEnd) 0x00 else 0xFF
+                row[x] = (alpha shl 24) or 0x336699
+            }
+            bitmap.setPixels(row, 0, width, 0, y, width, 1)
+        }
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        bitmap.recycle()
+        return out.toByteArray()
+    }
+
     /** PNG real completamente opaco (canal alfa a 0xFF en todo). */
     fun opaquePng(
         width: Int,
