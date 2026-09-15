@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -158,6 +159,18 @@ public class ControllerSession(
     private var eventsJob: Job? = null
     private var heartbeatJob: Job? = null
 
+    /**
+     * `command_id` recibidos cuyo resultado aún no salió por el wire. Se
+     * rellena al despachar el evento — ANTES de que la corrutina llame a
+     * `execute` (que es cuando el executor registra el job en su `inflight`).
+     * Sin este set, un `cancel` que llega en esa ventana no encuentra el job
+     * y el comando ejecutaría su side-effect pese a estar cancelado.
+     */
+    private val pendingCommands = ConcurrentHashMap.newKeySet<String>()
+
+    /** `command_id` cancelados antes de entrar en `inflight` del executor. */
+    private val cancelledCommands = ConcurrentHashMap.newKeySet<String>()
+
     private val mutableState = MutableStateFlow<ControllerState>(ControllerState.Idle)
 
     /** Estado del controlador para la UI ([ControllerState]). */
@@ -222,10 +235,16 @@ public class ControllerSession(
                         }
                     }
                 }
-            // El registro anterior era de OTRA sesión: detach de cortesía.
+            // El registro anterior era de OTRA sesión: detach de cortesía. Va
+            // bajo registerMutex para no adelantar a un register en vuelo por
+            // el wire (sendMutex serializa la escritura, no el orden entre
+            // corrutinas): detach→register mal ordenado dejaría el scope
+            // borrado en el servidor con la app creyéndose Attached.
             stale?.let { (client, oldSession) ->
-                runCatching { client.detachBrowserController(oldSession) }
-                    .onFailure { warn("browser.controller.detach de la sesión anterior no salió") }
+                registerMutex.withLock {
+                    runCatching { client.detachBrowserController(oldSession) }
+                        .onFailure { warn("browser.controller.detach de la sesión anterior no salió") }
+                }
             }
             if (proceed) {
                 executor.cancelAll()
@@ -255,8 +274,13 @@ public class ControllerSession(
         executor.cancelAll()
         val (client, sessionId) = target ?: return
         if (sessionId != null) {
-            runCatching { client.detachBrowserController(sessionId) }
-                .onFailure { warn("browser.controller.detach no salió") }
+            // Bajo registerMutex: el detach espera a un register en vuelo en
+            // vez de adelantarlo por el wire (orden invertido = scope borrado
+            // en servidor tras registrarse — ver attach()).
+            registerMutex.withLock {
+                runCatching { client.detachBrowserController(sessionId) }
+                    .onFailure { warn("browser.controller.detach no salió") }
+            }
         }
     }
 
@@ -313,6 +337,9 @@ public class ControllerSession(
                 }
             if (wantsController) {
                 boundSessionId?.let { sessionId ->
+                    // El Attached anterior murió con el socket: reflejar el
+                    // re-registro en vez de dejar el estado stale.
+                    mutableState.value = ControllerState.Registering
                     scope.launch { registerOn(client, sessionId) }
                 }
             }
@@ -349,7 +376,9 @@ public class ControllerSession(
         if (payload == null || !isForThisController(payload)) {
             return
         }
-        scope.launch { executeAndReport(client, sessionId, BrowserCommand.from(payload)) }
+        val command = BrowserCommand.from(payload)
+        pendingCommands += command.commandId
+        scope.launch { executeAndReport(client, sessionId, command) }
     }
 
     /**
@@ -381,7 +410,16 @@ public class ControllerSession(
         val payload =
             client.decodePayload(event, BrowserControllerCancelPayload.serializer()) ?: return
         if (!executor.cancel(payload.commandId)) {
-            warn("browser.controller.cancel de un comando no vivo (${payload.commandId.take(MAX_TAG_CHARS)})")
+            // El job no está en el inflight del executor. Si el comando se
+            // recibió pero su corrutina aún no llamó a execute(), tombstone:
+            // executeAndReport lo lee antes de ejecutar y contesta cancelado
+            // sin side-effect. (Si el executor ya lo registró, cancel() lo
+            // coge aunque el job esté en New — ver WebViewController.cancel.)
+            if (pendingCommands.contains(payload.commandId)) {
+                cancelledCommands += payload.commandId
+            } else {
+                warn("browser.controller.cancel de un comando no vivo (${payload.commandId.take(MAX_TAG_CHARS)})")
+            }
         }
     }
 
@@ -449,16 +487,19 @@ public class ControllerSession(
         client: GatewayClient,
         sessionId: String,
     ) {
-        registerMutex.withLock {
-            val skip =
-                stateMutex.withLock {
-                    closed || !wantsController || boundSessionId != sessionId || registeredOn === client
+        // El RPC va bajo registerMutex; el outcome se procesa FUERA — el
+        // `detach` de cortesía del undo también pasa por registerMutex y un
+        // Mutex no es reentrante.
+        val outcome =
+            registerMutex.withLock {
+                val skip =
+                    stateMutex.withLock {
+                        closed || !wantsController || boundSessionId != sessionId || registeredOn === client
+                    }
+                if (skip) {
+                    return
                 }
-            if (skip) {
-                return
-            }
-            mutableState.value = ControllerState.Registering
-            val outcome =
+                mutableState.value = ControllerState.Registering
                 runCatching {
                     client.registerBrowserController(
                         sessionId = sessionId,
@@ -467,8 +508,8 @@ public class ControllerSession(
                         capabilities = BrowserCommand.Actions.CAPABILITIES,
                     )
                 }
-            onRegisterOutcome(client, sessionId, outcome.exceptionOrNull())
-        }
+            }
+        onRegisterOutcome(client, sessionId, outcome.exceptionOrNull())
     }
 
     /**
@@ -489,7 +530,14 @@ public class ControllerSession(
 
             failure is JsonRpcException && failure.code == BROWSER_DISABLED_CODE -> {
                 warn("browser.controller.register rechazado 4403 (flag apagado/protocolo/identidad)")
-                mutableState.value = ControllerState.ServerNotEnabled
+                // Un fallo en vuelo que llega tras detach() no debe pisar Idle
+                // con un error: sólo se escribe si la intención sigue viva.
+                // (`closed` no hace falta: close()→detach() apaga wantsController.)
+                stateMutex.withLock {
+                    if (wantsController && boundSessionId == sessionId && client === currentClient) {
+                        mutableState.value = ControllerState.ServerNotEnabled
+                    }
+                }
             }
 
             failure is ChannelClosedException -> {
@@ -499,7 +547,12 @@ public class ControllerSession(
                 warn("socket muerto durante browser.controller.register")
             }
 
-            else -> mutableState.value = ControllerState.RegistrationFailed(failure)
+            else ->
+                stateMutex.withLock {
+                    if (wantsController && boundSessionId == sessionId && client === currentClient) {
+                        mutableState.value = ControllerState.RegistrationFailed(failure)
+                    }
+                }
         }
     }
 
@@ -527,8 +580,13 @@ public class ControllerSession(
                 }
             }
         if (undo) {
-            runCatching { client.detachBrowserController(sessionId) }
-                .onFailure { warn("detach del registro deshecho no salió") }
+            // registerMutex ya no lo tenemos (registerOn lo suelta antes de
+            // procesar el outcome): el undo se encola tras cualquier RPC de
+            // registro en curso — el orden por el wire queda garantizado.
+            registerMutex.withLock {
+                runCatching { client.detachBrowserController(sessionId) }
+                    .onFailure { warn("detach del registro deshecho no salió") }
+            }
         }
     }
 
@@ -548,6 +606,22 @@ public class ControllerSession(
                 // Canal muerto: el re-registro de la próxima generación abre otro bucle.
                 warn("heartbeat sobre canal muerto (${e::class.simpleName})")
                 return
+            } catch (e: JsonRpcException) {
+                if (e.code == BROWSER_DISABLED_CODE) {
+                    // 4403 con socket vivo: el servidor olvidó el scope (wipe
+                    // de estado). Reintentar heartbeat no sirve — el registro
+                    // está muerto: se limpia y se re-registra por este canal.
+                    warn("heartbeat 4403 — scope caído en servidor, re-registrando")
+                    stateMutex.withLock {
+                        if (registeredOn === client) {
+                            registeredOn = null
+                            mutableState.value = ControllerState.Registering
+                        }
+                    }
+                    scope.launch { ensureRegistered() }
+                    return
+                }
+                warn("browser.controller.heartbeat falló (${e::class.simpleName})")
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: ChannelException,
             ) {
@@ -571,17 +645,30 @@ public class ControllerSession(
         sessionId: String,
         command: BrowserCommand,
     ) {
-        val outcome = executor.execute(command)
-        runCatching {
-            client.sendBrowserControllerResult(
-                sessionId = sessionId,
-                commandId = command.commandId,
-                ok = outcome.ok,
-                resultJson = outcome.resultJson.takeIf { outcome.ok },
-                error = outcome.resultJson.takeUnless { outcome.ok },
-            )
-        }.onFailure {
-            warn("browser.controller.result no salió (${command.action.take(MAX_TAG_CHARS)})")
+        try {
+            val outcome =
+                if (cancelledCommands.remove(command.commandId)) {
+                    // Cancelado en la ventana evento→execute: resultado §2.6
+                    // sin tocar el WebView.
+                    BrowserCommandOutcome.failure("Command cancelled")
+                } else {
+                    executor.execute(command)
+                }
+            runCatching {
+                client.sendBrowserControllerResult(
+                    sessionId = sessionId,
+                    commandId = command.commandId,
+                    ok = outcome.ok,
+                    resultJson = outcome.resultJson.takeIf { outcome.ok },
+                    error = outcome.resultJson.takeUnless { outcome.ok },
+                )
+            }.onFailure {
+                if (it is CancellationException) throw it
+                warn("browser.controller.result no salió (${command.action.take(MAX_TAG_CHARS)})")
+            }
+        } finally {
+            pendingCommands -= command.commandId
+            cancelledCommands -= command.commandId
         }
     }
 

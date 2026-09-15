@@ -137,7 +137,10 @@ public class WebViewController(
      */
     public fun cancel(commandId: String): Boolean =
         inflight[commandId]?.let { job ->
-            if (job.isActive) {
+            // isActive excluiría un job LAZY ya registrado pero aún en New
+            // (ventana putIfAbsent→start): cancelarlo igual — nunca arrancará
+            // y su invokeOnCompletion produce el resultado "Command cancelled".
+            if (!job.isCompleted) {
                 job.cancel()
                 true
             } else {
