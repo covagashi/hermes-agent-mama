@@ -35,6 +35,7 @@ import java.io.File
  *   "turns": [{"when": {"text_contains": "hola" | "text_regex": "…"},
  *              "submit_status": {"status": "queued"},
  *              "submit_error": {"code": -32000, "message": "…"},
+ *              "submit_delay_ms": N,
  *              "steps": […]}],
  *   "default_turn": {"steps": […]}
  * }
@@ -121,6 +122,8 @@ class FakeGatewayScript internal constructor(
         val matcher: PromptMatcher?,
         val submitStatus: JsonObject?,
         val submitError: RpcErrorSpec?,
+        /** Latencia del servidor antes de aceptar el submit (UI optimista, tests de carrera). */
+        val submitDelayMs: Long = 0L,
         val steps: List<ScriptStep>,
     )
 
@@ -380,6 +383,7 @@ class FakeGatewayScript internal constructor(
                 matcher = matcher,
                 submitStatus = obj["submit_status"] as? JsonObject,
                 submitError = submitError,
+                submitDelayMs = obj["submit_delay_ms"].numOrNull()?.toLong() ?: 0L,
                 steps = steps,
             )
         }

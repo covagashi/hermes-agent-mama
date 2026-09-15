@@ -33,6 +33,7 @@ class FakeGatewayScriptTest {
                 "request_cancel",
                 "sesiones",
                 "ticket_requerido",
+                "c4_chat",
             )
         for (name in names) {
             val script = FakeGatewayScript.load(name)

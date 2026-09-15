@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la pantalla Chat (C4, mockup Chat.dc.html). Español simple para
+     una persona mayor, sin nombres de herramientas ni tecnicismos ("sesión" →
+     "chat", "gateway" → "Hermes", ROADMAP §3). Fichero aparte por pantalla (§4). -->
+<resources>
+    <!-- Barra superior -->
+    <string name="chat_back">Volver a la lista de chats</string>
+
+    <!-- Subtítulo de estado bajo el título (una sola línea, por prioridad). -->
+    <string name="chat_typing">Hermes está escribiendo…</string>
+    <string name="chat_running">Hermes sigue con lo anterior</string>
+    <string name="chat_queued">Tu mensaje espera su turno…</string>
+
+    <!-- Chip de actividad (tool.start → texto llano, mapa de C4). -->
+    <string name="chat_activity_web">🔎 Buscando en internet</string>
+    <string name="chat_activity_browser">🌐 Navegando</string>
+    <string name="chat_activity_files">📂 Mirando archivos</string>
+    <string name="chat_activity_email">📧 Leyendo el correo</string>
+    <string name="chat_activity_send_email">📤 Enviando correo</string>
+    <string name="chat_activity_working">⏳ Trabajando…</string>
+
+    <!-- Botón Parar (mientras Hermes trabaja) → session.interrupt. -->
+    <string name="chat_stop">Parar</string>
+
+    <!-- Composer -->
+    <string name="chat_composer_hint">Escribe un mensaje</string>
+    <string name="chat_send">Enviar mensaje</string>
+
+    <!-- Separadores de día del transcript. -->
+    <string name="chat_today">Hoy</string>
+    <string name="chat_yesterday">Ayer</string>
+
+    <!-- Chat vacío. -->
+    <string name="chat_empty">Di hola a Hermes para empezar.</string>
+
+    <!-- Envío fallido / avisos. -->
+    <string name="chat_send_failed">No se pudo enviar tu mensaje. Revisa la conexión.</string>
+    <string name="chat_retry">Toca para intentarlo otra vez</string>
+    <string name="chat_interrupt_failed">No pude parar a Hermes. Inténtalo otra vez.</string>
+    <string name="chat_gateway_error">Algo no fue bien. Hermes lo intenta otra vez.</string>
+    <string name="chat_offline">Sin conexión. Reintentando…</string>
+
+    <!-- Ejemplos para previews y capturas de Roborazzi (datos ficticios). -->
+    <string name="chat_example_title">Factura de la lavadora</string>
+    <string name="chat_example_user">Compré una lavadora la semana pasada y no encuentro la factura</string>
+    <string name="chat_example_hermes">Voy a mirar en tu correo y en la tienda. Un momento.</string>
+    <string name="chat_example_stream">He encontrado tu pedido del 3 de septiembre. Estoy descargando la fac</string>
+</resources>

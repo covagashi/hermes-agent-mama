@@ -2,6 +2,7 @@ package ai.hermes.mama.core.storage
 
 import ai.hermes.mama.contract.SessionResumeResult
 import ai.hermes.mama.contract.TranscriptMessage
+import ai.hermes.mama.gateway.GatewayEvent
 import ai.hermes.mama.gateway.JsonRpcException
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
@@ -321,6 +322,28 @@ class SessionRepository(
         }
         if (runtimeId != null) {
             _liveTurns.update { turns -> turns - runtimeId }
+        }
+    }
+
+    /**
+     * Re-aplica eventos que el canal NO entregó en vivo (C4): el resultado de
+     * `session.events.since` tras una reconexión pasa por el mismo
+     * [SessionEventReducer] que el wire — un `message.delta` perdido rellena
+     * el turno en [liveTurns] y un `message.complete` perdido persiste la
+     * burbuja. El llamador filtra por `seq` (no se re-aplican eventos ya vistos)
+     * y los entrega en orden; un evento que rompe se descarta con aviso y el
+     * replay sigue — mismo contrato que el colector vivo.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun replayEvents(events: List<GatewayEvent>) {
+        for (event in events) {
+            try {
+                reducer.onEvent(event)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                warn("evento replay '${event.type.take(MAX_WIRE_TAG_CHARS)}' descartado (${e::class.simpleName})")
+            }
         }
     }
 

@@ -4,4 +4,6 @@
      entre PRs paralelos. -->
 <resources>
     <string name="app_name">Hermes</string>
+    <!-- Host dev (C4): esperando la primera conexión con el FakeGateway. -->
+    <string name="dev_connecting">Conectando con Hermes…</string>
 </resources>
