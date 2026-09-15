@@ -11,6 +11,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -54,12 +55,23 @@ dependencies {
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.junit4)
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // Robolectric: el contrato del SecureStore (B3) se testea en JVM con prefs reales.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric).
     testRuntimeOnly(libs.junit.vintage.engine)
+
+    // El camino cifrado del SecureStore (AndroidKeyStore) sólo existe en
+    // dispositivo/emulador — vive en src/androidTest (tarea B3).
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 tasks.withType<Test>().configureEach {
