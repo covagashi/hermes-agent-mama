@@ -1,0 +1,180 @@
+name: Android Release
+
+# Release del flavor mama (ROADMAP §5, tarea J1). Se dispara con tags
+# `android-v*` (p. ej. `android-v0.9.42`) — el workflow_dispatch permite
+# ensayar el pipeline sin crear ni tocar ninguna GitHub Release.
+#
+# Produce app-mama-release.apk y app-mama-release.aab firmados: con los 4
+# secretos ANDROID_KEYSTORE_* se usa el signingConfig release de
+# app/build.gradle.kts; sin ellos la firma cae a la clave de debug (fallback
+# documentado: instalable por sideload, no apto para Google Play). Ambos se
+# verifican en CI con `apksigner verify` y `bundletool validate`, se intenta
+# subir el AAB a la pista INTERNA de Google Play sólo si existe el secreto
+# PLAY_SERVICE_ACCOUNT_JSON (continue-on-error: Play puede rechazar la app —
+# §9.5 — y el APK debe publicarse igualmente) y SIEMPRE se adjuntan APK+AAB a
+# la GitHub Release del tag (fallback sideload).
+#
+# versionCode = GITHUB_RUN_NUMBER (variable de entorno por defecto del runner,
+# la lee app/build.gradle.kts); versionName = 0.9.<run> (ROADMAP §4).
+# Las acciones se fijan por SHA como en el resto del repo.
+
+on:
+  push:
+    tags:
+      - "android-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # crear la GitHub Release y adjuntar los artefactos
+
+concurrency:
+  # Un release en curso NUNCA se cancela a mitad.
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUNDLETOOL_VERSION: "1.18.3"
+  # sha256 de bundletool-all-1.18.3.jar (publicado en la release de google/bundletool)
+  BUNDLETOOL_SHA256: "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
+
+jobs:
+  release:
+    name: Build, firmar y publicar (mama)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      # Los secrets no se pueden evaluar en `jobs.if`/`steps.if`: su presencia
+      # se detecta en un paso previo que escribe un output (patrón de android.yml).
+      - name: Detectar secretos de firma
+        id: signing
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && \
+             [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Secretos de firma presentes → firma release."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Sin secretos de firma → mamaRelease se firma con la clave de debug (sideload OK, Play NO)."
+          fi
+
+      # El .jks se materializa en $RUNNER_TEMP (fuera del checkout): jamás
+      # toca el árbol del repo ni queda en un artefacto.
+      - name: Decodificar keystore a $RUNNER_TEMP
+        id: keystore
+        if: steps.signing.outputs.available == 'true'
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mama-release.jks"
+          echo "file=$RUNNER_TEMP/mama-release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: ":app:assembleMamaRelease + :app:bundleMamaRelease"
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.file }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleMamaRelease :app:bundleMamaRelease --stacktrace
+
+      - name: Recoger artefactos con nombre estable
+        working-directory: apps/android
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/mama/release/app-mama-release.apk dist/app-mama-release.apk
+          cp app/build/outputs/bundle/mamaRelease/app-mama-release.aab dist/app-mama-release.aab
+          ls -lh dist/
+
+      - name: apksigner verify (el APK debe ir firmado)
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          echo "apksigner: $APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs apps/android/dist/app-mama-release.apk
+
+      - name: Descargar bundletool (sha256 verificado)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/bundletool.jar" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          echo "${BUNDLETOOL_SHA256}  $RUNNER_TEMP/bundletool.jar" | sha256sum -c -
+
+      - name: bundletool validate (el AAB debe ser válido)
+        run: java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle=apps/android/dist/app-mama-release.aab
+
+      - name: Detectar secreto de Google Play
+        id: play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Sin PLAY_SERVICE_ACCOUNT_JSON → se omite Play; el APK queda en la GitHub Release."
+          fi
+
+      # Sólo en un tag, con el secreto Y con firma release real (un AAB
+      # firmado con la clave de debug fijaría un upload key de debug en Play
+      # App Signing). continue-on-error: Play puede rechazar la app (§9.5);
+      # la GitHub Release de abajo se publica SIEMPRE.
+      - name: Subir AAB a la pista interna de Google Play
+        if: startsWith(github.ref, 'refs/tags/') && steps.play.outputs.available == 'true' && steps.signing.outputs.available == 'true'
+        continue-on-error: true
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ai.hermes.mama
+          releaseFiles: apps/android/dist/app-mama-release.aab
+          track: internal
+          status: completed
+
+      - name: Subir artefactos del run (respaldo)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: app-mama-release
+          path: apps/android/dist/
+          if-no-files-found: error
+
+      # La GitHub Release es el canal garantizado de distribución (sideload):
+      # se crea si no existe y se le adjuntan siempre el APK y el AAB.
+      # Fuera de un tag (workflow_dispatch) este paso se salta.
+      - name: GitHub Release + adjuntar APK y AAB
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/android/dist
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "La release $TAG ya existe → se re-adjuntan los artefactos."
+            gh release upload "$TAG" app-mama-release.apk app-mama-release.aab --clobber
+          else
+            # Sin firma release real (fallback debug) la Release se marca
+            # --prerelease y lo dice el título: cada build debug lleva una
+            # clave distinta y "instalar encima" no conservaría los chats.
+            EXTRA_FLAGS=()
+            TITLE_SUFFIX=""
+            if [ "${{ steps.signing.outputs.available }}" != "true" ]; then
+              EXTRA_FLAGS+=(--prerelease)
+              TITLE_SUFFIX=" — firma de depuración, sin Play"
+            fi
+            gh release create "$TAG" app-mama-release.apk app-mama-release.aab \
+              --title "Hermes para mamá ($TAG)$TITLE_SUFFIX" \
+              --verify-tag \
+              --generate-notes \
+              "${EXTRA_FLAGS[@]}"
+          fi

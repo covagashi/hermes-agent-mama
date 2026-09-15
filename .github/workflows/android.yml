@@ -169,9 +169,9 @@ jobs:
   # APK del flavor mama. Los secrets NO se pueden evaluar en `jobs.if`,
   # así que se pasan a env y se comprueba su presencia en un paso previo.
   # Con los 4 secretos → assembleMamaRelease con el keystore decodificado
-  # en $RUNNER_TEMP (el signingConfigs.release que los consume llega en
-  # J1; mientras tanto el release sale unsigned pero ejercita la ruta).
-  # Sin secretos → assembleMamaDebug. El APK se sube siempre.
+  # en $RUNNER_TEMP (lo consume el signingConfigs.release de
+  # app/build.gradle.kts vía ANDROID_KEYSTORE_FILE, J1). Sin secretos →
+  # assembleMamaDebug. El APK se sube siempre.
   # versionCode lo fija GITHUB_RUN_NUMBER vía app/build.gradle.kts.
   # ─────────────────────────────────────────────────────────────────────
   build:

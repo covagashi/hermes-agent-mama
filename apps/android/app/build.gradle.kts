@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -11,6 +13,45 @@ val ciVersionCode =
         .map(String::toInt)
         .getOrElse(1)
 
+// ── Firma release (ROADMAP §5, tarea J1) ─────────────────────────────────────
+// El keystore de release NUNCA vive en el repo (AGENTS.md: repo público). Llega
+// por variables de entorno, en cualquiera de estas dos formas:
+//   ANDROID_KEYSTORE_FILE — ruta a un .jks ya materializado. Así lo hace CI:
+//       decodifica ANDROID_KEYSTORE_B64 en $RUNNER_TEMP y pasa la ruta. En local
+//       puede apuntar a un keystore de prueba fuera del repo (p. ej. /tmp/…).
+//   ANDROID_KEYSTORE_B64 — el .jks codificado en base64; Gradle lo materializa
+//       en build/signing/release-keystore.jks (build/ está en .gitignore).
+// junto a ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS y ANDROID_KEY_PASSWORD.
+// Si falta cualquiera, el buildType release firma con el signingConfig de debug
+// (fallback documentado): el APK/AAB queda firmado e instalable por sideload,
+// pero NO es apto para Google Play.
+val signingEnv = { name: String ->
+    providers.environmentVariable(name).orNull?.takeIf(String::isNotBlank)
+}
+
+val releaseStoreFile: File? =
+    signingEnv("ANDROID_KEYSTORE_FILE")?.let(::file)
+        ?: signingEnv("ANDROID_KEYSTORE_B64")?.let { b64 ->
+            val keystore =
+                layout.buildDirectory
+                    .dir("signing")
+                    .get()
+                    .asFile
+                    .apply { mkdirs() }
+                    .resolve("release-keystore.jks")
+            val bytes = Base64.getMimeDecoder().decode(b64) // MIME: tolera saltos de línea
+            if (!keystore.exists() || !keystore.readBytes().contentEquals(bytes)) {
+                keystore.writeBytes(bytes)
+            }
+            keystore
+        }
+
+val releaseSigningAvailable =
+    releaseStoreFile != null &&
+        signingEnv("ANDROID_KEYSTORE_PASSWORD") != null &&
+        signingEnv("ANDROID_KEY_ALIAS") != null &&
+        signingEnv("ANDROID_KEY_PASSWORD") != null
+
 android {
     namespace = "ai.hermes.mama"
     compileSdk = 35 // ROADMAP §4: minSdk 29, targetSdk 35
@@ -20,7 +61,8 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = ciVersionCode
-        versionName = "0.0.1"
+        // ROADMAP §4: versionName = 0.<hito>.<n> — hito M9, n = run de CI.
+        versionName = "0.9.$ciVersionCode"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,10 +81,31 @@ android {
         }
     }
 
+    signingConfigs {
+        // Sólo se crea cuando están TODAS las variables de entorno (ver cabecera
+        // del fichero); si falta alguna, release cae a la firma de debug.
+        if (releaseSigningAvailable) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = signingEnv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = signingEnv("ANDROID_KEY_ALIAS")
+                keyPassword = signingEnv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // R8/ProGuard y la firma por secretos de CI llegan en J1/J2.
+            // R8/ProGuard llega en J2 (endurecimiento).
             isMinifyEnabled = false
+            // Fallback J1: sin secretos de firma, release se firma con la clave
+            // de debug — instalable por sideload, no apto para Google Play.
+            signingConfig =
+                if (releaseSigningAvailable) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 
