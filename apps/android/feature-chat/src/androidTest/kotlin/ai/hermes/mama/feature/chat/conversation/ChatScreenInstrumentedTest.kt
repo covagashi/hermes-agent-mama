@@ -20,10 +20,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.printToLog
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -137,7 +140,17 @@ class ChatScreenInstrumentedTest {
             .performSemanticsAction(SemanticsActions.OnClick)
 
         // Burbuja de la usuaria (optimista → fila real tras el submit).
-        waitForText("hola")
+        try {
+            waitForText("hola")
+        } catch (e: ComposeTimeoutException) {
+            composeRule.onRoot().printToLog(TAG)
+            throw AssertionError(
+                "burbuja 'hola' nunca apareció: items=${viewModel.items.value} " +
+                    "streaming=${viewModel.liveStreaming.value} " +
+                    "offline=${viewModel.offline.value} header=${viewModel.header.value}",
+                e,
+            )
+        }
 
         // Subtítulo "escribiendo" y chip de actividad durante el turno.
         try {
@@ -164,9 +177,7 @@ class ChatScreenInstrumentedTest {
     // --- helpers ---
 
     private fun nodeExists(text: String): Boolean =
-        runCatching {
-            composeRule.onNodeWithText(text).assertIsDisplayed()
-        }.isSuccess
+        composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
 
     private fun waitForText(
         text: String,
