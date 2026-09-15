@@ -12,10 +12,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.printToLog
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -135,7 +133,8 @@ class ConnectionScreenInstrumentedTest {
         composeRule
             .onNodeWithContentDescription("Mostrar contraseña")
             .assertExists()
-            .performClick()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Ocultar contraseña").assertExists()
     }
 
@@ -145,7 +144,10 @@ class ConnectionScreenInstrumentedTest {
         setScreen(settings)
         composeRule.onNodeWithText("Leer las respuestas en voz alta").assertExists()
         // El switch del mockup es un nodo `toggleable`: empieza activado (defecto §mockup).
-        composeRule.onNode(isToggleable()).assertExists().performClick()
+        composeRule
+            .onNode(isToggleable())
+            .assertExists()
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
         composeRule.waitUntil(timeoutMillis = 15_000) { !settings.readAloudEnabled.value }
     }
@@ -192,8 +194,6 @@ class ConnectionScreenInstrumentedTest {
                 )
             }
         }
-        // Diagnóstico CI: árbol de semántica completo tras la primera composición.
-        composeRule.onRoot().printToLog(TAG)
         return vm
     }
 
@@ -214,18 +214,11 @@ class ConnectionScreenInstrumentedTest {
     }
 
     private fun clickButton(text: String) {
-        // Diagnóstico CI: si el click no dispara onClick, el log muestra cuántos
-        // nodos casan con el texto, si llevan la acción OnClick y su bounds.
-        val matches = composeRule.onAllNodesWithText(text).fetchSemanticsNodes()
-        Log.w(
-            TAG,
-            "clickButton('$text'): ${matches.size} match(es): " +
-                matches.joinToString { n ->
-                    "id=${n.id} click=${SemanticsActions.OnClick in n.config} " +
-                        "bounds=${n.boundsInRoot}"
-                },
-        )
-        composeRule.onNodeWithText(text).performClick()
+        // `performSemanticsAction` invoca el OnClick del nodo directamente:
+        // `performClick` inyecta un gesto por coordenadas y en el emulador de
+        // CI (320×536, IME abierto tras teclear) los botones quedan con bounds
+        // vacíos o cubiertos — el toque no cae en nada.
+        composeRule.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
     }
 
