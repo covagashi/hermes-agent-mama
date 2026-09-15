@@ -68,7 +68,7 @@ sealed interface ConnectionEvent {
  * se mapearán a este tipo). El [ConnectionManager] para el bucle y publica
  * [ConnectionState.Failed]; [ConnectionManager.connect] puede reintentar tras él.
  */
-class ConnectionFatalException(
+open class ConnectionFatalException(
     message: String? = null,
     cause: Throwable? = null,
 ) : Exception(message, cause)
