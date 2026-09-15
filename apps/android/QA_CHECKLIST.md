@@ -180,7 +180,8 @@ error técnico.
 
 ### 13. Mandar un documento (y uno que pesa demasiado)
 **Preparación**: en Descargas del móvil, un PDF pequeño y un archivo de **más de 8
-MB** (p. ej. un vídeo corto).
+MB** (p. ej. un vídeo de ~1 min o un escaneo grande; el tamaño exacto se ve en
+Detalles del archivo).
 **Pasos**:
 1. Pulsa 📎 → elegir archivo → selecciona el PDF pequeño.
 2. Comprueba que aparece con su nombre junto al mensaje, escribe «guárdame esto» y
@@ -292,8 +293,9 @@ nuevo.» — la app no se queda «Escuchando…» para siempre ni envía un mens
 inventado. Siempre queda la opción de escribir a mano.
 
 ### 22. Escuchar las respuestas en voz alta
-**Preparación**: activa «Leer las respuestas en voz alta» y sube el volumen del
-móvil.
+**Preparación**: activa «Leer las respuestas en voz alta» (vive en la pantalla de
+conexión; con la app ya conectada, mantén pulsado el logo unos 3 s para volver a
+ella) y sube el volumen del móvil.
 **Pasos**:
 1. Envía un mensaje y espera la respuesta sin tocar nada.
 2. Pulsa el 🔊 de una burbuja anterior de Hermes para oírla otra vez.
@@ -314,8 +316,8 @@ Ajustes → Pantalla → tamaño de fuente al máximo (200 %).
    chat → enviar mensaje → responder una tarjeta.
 
 **Esperado**: TalkBack nombra cada cosa con sentido («Nuevo chat», «Dictar un
-mensaje», «Hermes está escribiendo», cada mensaje con su autor), el foco va en orden
-lógico y avisa cuando llega la respuesta. Con la fuente al 200 % todo se lee
+mensaje. Mantén pulsado y habla.», «Hermes está escribiendo», cada mensaje con su
+autor), el foco va en orden lógico y avisa cuando llega la respuesta. Con la fuente al 200 % todo se lee
 completo: nada cortado, los botones se pueden pulsar y la tarjeta Sí/No se ve entera
 (aunque haya que desplazarse).
 
