@@ -20,13 +20,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.printToLog
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -123,7 +120,7 @@ class ChatScreenInstrumentedTest {
     @Test
     fun streaming_chip_y_complete_se_ven_en_pantalla() {
         // La usuaria escribe y envía. El botón queda deshabilitado hasta que
-        // el texto llega al estado — un performClick inmediato puede ser no-op.
+        // el texto llega al estado — un click inmediato puede ser no-op.
         composeRule.onNode(hasSetTextAction()).performTextInput("hola")
         composeRule.waitUntil(timeoutMillis = WAIT_MS) {
             runCatching {
@@ -132,21 +129,12 @@ class ChatScreenInstrumentedTest {
                     .assertIsEnabled()
             }.isSuccess
         }
-        // Diagnóstico CI: si el click no dispara, el log muestra cuántos nodos
-        // casan con el contentDescription, si llevan OnClick y su bounds.
-        val sendMatches =
-            composeRule
-                .onAllNodesWithContentDescription(string(R.string.chat_send))
-                .fetchSemanticsNodes()
-        Log.w(
-            TAG,
-            "send node: ${sendMatches.size} match(es): " +
-                sendMatches.joinToString { n ->
-                    "id=${n.id} click=${SemanticsActions.OnClick in n.config} bounds=${n.boundsInRoot}"
-                },
-        )
-        composeRule.onRoot().printToLog(TAG)
-        composeRule.onNodeWithContentDescription(string(R.string.chat_send)).performClick()
+        // `performSemanticsAction` invoca el OnClick directamente: `performClick`
+        // inyecta un gesto por coordenadas y con el IME abierto tras teclear el
+        // botón queda con bounds vacíos o cubiertos en el emulador de CI.
+        composeRule
+            .onNodeWithContentDescription(string(R.string.chat_send))
+            .performSemanticsAction(SemanticsActions.OnClick)
 
         // Burbuja de la usuaria (optimista → fila real tras el submit).
         waitForText("hola")
