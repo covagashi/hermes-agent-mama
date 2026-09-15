@@ -20,6 +20,7 @@ class FakeGatewayScriptTest {
                 "deltas",
                 "approval",
                 "clarify",
+                "clarify3",
                 "browser",
                 "browser_off",
                 "browser_cancel",

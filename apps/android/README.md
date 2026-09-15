@@ -62,6 +62,7 @@ pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
 | `deltas` | Streaming con pausas, `status.update` y un tool.start/complete |
 | `approval` | Petición servidor→cliente `approval` (`srq-*`) que espera Sí/No |
 | `clarify` | Pregunta por lotes (dos `qid`) y pregunta simple `{answer}` |
+| `clarify3` | Lote de tres `qid` (choices + multi_select + texto libre), C7 |
 | `browser` | Controlador de navegador: navigate + snapshot + click con `browser.controller.result` |
 | `browser_off` | `browser.enabled=false`: todo `browser.controller.*` → 4403 (flag apagado) |
 | `browser_cancel` | `browser_command` sin esperar + `browser.controller.cancel` del servidor |

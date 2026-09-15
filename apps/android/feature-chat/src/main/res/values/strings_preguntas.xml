@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la tarjeta de pregunta (C7, mockup Pregunta.dc.html).
+     Español simple para una persona mayor: "Hermes pregunta" + la pregunta en
+     grande; nunca nombres de herramientas ni tecnicismos (ROADMAP §3). -->
+<resources>
+    <!-- Cabecera de la hoja (verde, del mockup). -->
+    <string name="clarify_title">Hermes pregunta</string>
+
+    <!-- Progreso del lote de preguntas: "1 de 3". %1$d = actual, %2$d = total. -->
+    <string name="clarify_progress">%1$d de %2$d</string>
+
+    <!-- Pista bajo la opción que el backend marcó "(Recommended)". -->
+    <string name="clarify_recommended">Recomendada</string>
+
+    <!-- Botón que envía la selección de un multi_select. -->
+    <string name="clarify_done">Listo</string>
+
+    <!-- Campo de texto libre: pista normal y mientras se dicta. -->
+    <string name="clarify_field_hint">Escribe tu respuesta o toca el micrófono</string>
+    <string name="clarify_field_hint_listening">Escuchando… Toca el micrófono para parar.</string>
+
+    <!-- Botones circulares junto al campo (sólo icono → contentDescription). -->
+    <string name="clarify_mic_cd">Dictar la respuesta por voz</string>
+    <string name="clarify_mic_stop_cd">Parar de dictar</string>
+    <string name="clarify_send_cd">Enviar la respuesta</string>
+
+    <!-- Estado ya respondida: la tarjeta muestra la confirmación un momento. -->
+    <string name="clarify_answered">Respuesta enviada.</string>
+
+    <!-- Error al enviar la respuesta (socket caído / timeout): los controles
+         siguen activos para reintentar. -->
+    <string name="clarify_send_failed">No pude enviar tu respuesta. Prueba otra vez.</string>
+
+    <!-- Ejemplos para previews, tests y capturas de Roborazzi (datos ficticios). -->
+    <string name="clarify_example_question">¿En qué tienda compraste la lavadora?</string>
+    <string name="clarify_example_choice_1">Tienda Ejemplo (3 de septiembre)</string>
+    <string name="clarify_example_choice_2">Electro Casa (28 de agosto)</string>
+    <string name="clarify_example_choice_3">No me acuerdo</string>
+    <string name="clarify_example_multi_question">¿Qué recados hago esta tarde?</string>
+    <string name="clarify_example_multi_1">Correo</string>
+    <string name="clarify_example_multi_2">Farmacia</string>
+    <string name="clarify_example_multi_3">Panadería</string>
+    <string name="clarify_example_free_question">¿Para cuándo lo necesitas?</string>
+</resources>
