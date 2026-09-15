@@ -46,6 +46,8 @@ dependencies {
     // E2: FileAttacher (suspend + Dispatchers inyectados) y logs §8.
     implementation(libs.coroutines.core)
     implementation(libs.timber)
+    // E1: lectura de EXIF puro-Java (funciona también bajo Robolectric).
+    implementation(libs.androidx.exifinterface)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)
@@ -65,6 +67,10 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    // E1: ImageAttacher se prueba en JVM con sombras de Android (BitmapFactory,
+    // ContentResolver/provider, ExifInterface) — Robolectric corre con JUnit4.
+    testImplementation(libs.androidx.test.ext.junit)
+    // E1: el transport fake de los tests inspecciona los frames JSON-RPC.
     testImplementation(libs.kotlinx.serialization.json)
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric/Room de B6).
