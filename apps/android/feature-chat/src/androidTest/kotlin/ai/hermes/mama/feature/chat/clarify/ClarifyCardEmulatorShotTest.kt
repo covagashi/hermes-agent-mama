@@ -15,6 +15,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -88,17 +91,22 @@ class ClarifyCardEmulatorShotTest {
                 Variant("c7-pregunta-libre-100.png", 1.0f, false, freeTextState()),
             )
 
-        for (variant in variants) {
-            composeRule.setContent {
-                MamaTheme(darkTheme = variant.dark) {
-                    val density = LocalDensity.current
-                    CompositionLocalProvider(
-                        LocalDensity provides Density(density.density, variant.fontScale),
-                    ) {
-                        MockupScene(state = variant.state)
-                    }
+        // setContent sólo admite una llamada por test: la variante vive en un
+        // estado observable y cada captura recompone la escena.
+        var current by mutableStateOf(variants.first())
+        composeRule.setContent {
+            MamaTheme(darkTheme = current.dark) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density, current.fontScale),
+                ) {
+                    MockupScene(state = current.state)
                 }
             }
+        }
+
+        for (variant in variants) {
+            composeRule.runOnIdle { current = variant }
             composeRule.waitForIdle()
             val bitmap = composeRule.onNodeWithTag(SHOT_TAG).captureToImage().asAndroidBitmap()
             File(outDir, variant.name).outputStream().use { out ->
