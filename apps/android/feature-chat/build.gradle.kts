@@ -43,6 +43,10 @@ dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
 
+    // E2: FileAttacher (suspend + Dispatchers inyectados) y logs §8.
+    implementation(libs.coroutines.core)
+    implementation(libs.timber)
+
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -56,6 +60,12 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // E2: el path android.net.Uri/ContentResolver de FileAttacher se prueba con
+    // Robolectric (JUnit4); la lógica pura corre con JUnit 5 sin Android.
+    testImplementation(libs.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.serialization.json)
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric/Room de B6).
     testRuntimeOnly(libs.junit.vintage.engine)
