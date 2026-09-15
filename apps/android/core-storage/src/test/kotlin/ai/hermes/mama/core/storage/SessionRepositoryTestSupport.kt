@@ -54,16 +54,26 @@ internal fun row(
     title: String = "t-$id",
 ) = SessionListRow(id = id, title = title, startedAt = 100.0)
 
+/**
+ * `SessionResumeResult` de mentira: los caminos reales de resume devuelven
+ * `session_key` (la punta de linaje resuelta) — se replica por defecto —
+ * mientras `stored_session_id` sólo aparece en create/resume-de-draft.
+ */
 internal fun resumeResult(
     runtimeId: String,
     storedId: String,
     messages: List<TranscriptMessage> = emptyList(),
+    sessionKey: String? = storedId,
+    storedSessionId: String? = storedId,
+    running: Boolean? = null,
 ) = SessionResumeResult(
     sessionId = runtimeId,
     messageCount = messages.size.toLong(),
     messages = messages,
     info = SessionLiveInfo(),
-    storedSessionId = storedId,
+    storedSessionId = storedSessionId,
+    sessionKey = sessionKey,
+    running = running,
 )
 
 internal fun textPayload(text: String): JsonObject = buildJsonObject { put("text", text) }

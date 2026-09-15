@@ -53,37 +53,44 @@ internal class SessionEventReducer(
         }
     }
 
-    /** `session.info {running, title, stored_session_id…}`: refresca el mapeo runtime→stored y el título. */
+    /** `session.info {running, title, stored_session_id…}`: refresca el mapeo runtime→stored, el título y `running`. */
     private suspend fun onSessionInfo(event: GatewayEvent) {
-        val runtimeId = event.sessionId
-        val info = decode(event, SessionLiveInfo.serializer())
+        val runtimeId = event.sessionId ?: return
+        val info = decode(event, SessionLiveInfo.serializer()) ?: return
         val chat =
-            info
-                ?.storedSessionId
-                ?.takeIf { it.isNotBlank() }
+            info.storedSessionId
+                .takeIf { it.isNotBlank() }
                 ?.let { storedId -> chatDao.findByStoredId(storedId) }
-        if (runtimeId != null && chat != null && info != null) {
+        if (chat != null) {
             chatDao.upsert(
                 chat.copy(
                     runtimeId = runtimeId,
                     title = info.title.takeIf { it.isNotBlank() } ?: chat.title,
+                    running = info.running,
                 ),
             )
         }
     }
 
-    /** `session.title {session_id, title}`: el id del payload es el runtime id; se prueba stored por si acaso. */
+    /**
+     * `session.title {session_id, title}`: el id del payload es la *stored*
+     * key (contracts/events.py: "``session_id`` is the stored key"); se prueba
+     * el runtime id por si acaso (emisiones fuera del hook de auto-titling).
+     */
     private suspend fun onSessionTitle(event: GatewayEvent) {
         val payload = decode(event, SessionTitlePayload.serializer()) ?: return
-        val updated = chatDao.setTitleByRuntimeId(payload.sessionId, payload.title)
+        val updated = chatDao.setTitleByStoredId(payload.sessionId, payload.title)
         if (updated == 0) {
-            chatDao.setTitleByStoredId(payload.sessionId, payload.title)
+            chatDao.setTitleByRuntimeId(payload.sessionId, payload.title)
         }
     }
 
-    private fun onMessageStart(event: GatewayEvent) {
+    private suspend fun onMessageStart(event: GatewayEvent) {
         val runtimeId = event.sessionId ?: return
         liveTurns.update { turns -> turns + (runtimeId to LiveTurn(streaming = true)) }
+        chatDao.findByRuntimeId(runtimeId)?.let { chat ->
+            chatDao.upsert(chat.copy(running = true))
+        }
     }
 
     /** Un delta sin `message.start` previo también abre el turno (el reducer es tolerante). */
@@ -106,10 +113,11 @@ internal class SessionEventReducer(
         val body = payload?.finalText() ?: accumulated.ifEmpty { errorText.orEmpty() }
         val chat = chatDao.findByRuntimeId(runtimeId) ?: chatDao.findByStoredId(runtimeId)
         when {
-            // complete sin contenido (p. ej. turno sólo de herramientas): nada que pintar.
-            body.isEmpty() && errorText == null -> Unit
             chat == null -> warn("message.complete de una sesión no cacheada descartado")
-            else ->
+            // complete sin contenido (p. ej. turno sólo de herramientas): no hay
+            // burbuja que pintar pero el turno cerró igualmente.
+            body.isEmpty() && errorText == null -> chatDao.upsert(chat.copy(running = false))
+            else -> {
                 messageDao.insert(
                     MessageEntity(
                         chatId = chat.storedId,
@@ -119,6 +127,16 @@ internal class SessionEventReducer(
                         kind = if (errorText == null) MessageKind.TEXT else MessageKind.ERROR,
                     ),
                 )
+                // El turno cierra y el chat sube al tope: es la actividad más
+                // reciente (el servidor haría lo mismo vía effective_last_active).
+                chatDao.upsert(
+                    chat.copy(
+                        running = false,
+                        lastActive = chatDao.maxLastActive() + RANK_STEP,
+                        messageCount = chat.messageCount + 1,
+                    ),
+                )
+            }
         }
     }
 
@@ -144,6 +162,9 @@ internal class SessionEventReducer(
 
     private companion object {
         const val ROLE_ASSISTANT = "assistant"
+
+        /** Paso del rank [ChatEntity.lastActive] al colocar el chat en el tope tras `message.complete`. */
+        const val RANK_STEP = 1.0
 
         /** §8: `type` viene del wire sin cota — se trunca antes de loguear (misma regla que GatewayClient). */
         const val MAX_WIRE_TAG_CHARS = 64

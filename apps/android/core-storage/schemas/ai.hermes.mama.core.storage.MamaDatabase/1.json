@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "383f637889f250df26dded861db98b65",
+    "identityHash": "5b02fdb40a4126f1d9eb9093e5162855",
     "entities": [
       {
         "tableName": "chats",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`storedId` TEXT NOT NULL, `runtimeId` TEXT, `title` TEXT NOT NULL, `preview` TEXT NOT NULL, `startedAt` REAL NOT NULL, `messageCount` INTEGER NOT NULL, PRIMARY KEY(`storedId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`storedId` TEXT NOT NULL, `runtimeId` TEXT, `title` TEXT NOT NULL, `preview` TEXT NOT NULL, `startedAt` REAL NOT NULL, `lastActive` REAL NOT NULL, `messageCount` INTEGER NOT NULL, `running` INTEGER NOT NULL, `localOnly` INTEGER NOT NULL, PRIMARY KEY(`storedId`))",
         "fields": [
           {
             "fieldPath": "storedId",
@@ -39,8 +39,26 @@
             "notNull": true
           },
           {
+            "fieldPath": "lastActive",
+            "columnName": "lastActive",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "messageCount",
             "columnName": "messageCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "running",
+            "columnName": "running",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localOnly",
+            "columnName": "localOnly",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -156,7 +174,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '383f637889f250df26dded861db98b65')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5b02fdb40a4126f1d9eb9093e5162855')"
     ]
   }
 }

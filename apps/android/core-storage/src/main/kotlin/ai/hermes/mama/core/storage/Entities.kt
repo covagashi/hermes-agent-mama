@@ -16,6 +16,18 @@ import androidx.room.PrimaryKey
  *   eventos `message.*`. Cambia al reabrir (un runtime id queda obsoleto si el
  *   gateway se reinicia) — nunca forma parte de la identidad del chat.
  * - [startedAt]: `started_at` del wire (epoch en segundos, con decimales).
+ * - [lastActive]: **rank de ordenación, no un timestamp**: el wire no expone
+ *   `effective_last_active` (el orden del servidor), así que `session.list`
+ *   graba aquí su posición (la lista llega ya ordenada, más reciente primero).
+ *   La actividad local (crear un chat, un `message.complete`) sube el rank.
+ * - [running]: la sesión tiene un turno del agente en curso (mejor esfuerzo:
+ *   `session.resume`, `session.info`, `message.start`/`message.complete`). Lo
+ *   leen C4 («Hermes sigue con lo anterior») y C8 (ForegroundService).
+ * - [localOnly]: el chat existe sólo en memoria del gateway — `session.create`
+ *   NO persiste fila en `state.db` hasta el primer `prompt.submit`
+ *   (`methods_session.py`: "No DB row here (drafts left 'Untitled' litter)"),
+ *   así que `session.list` aún no lo devuelve y `refreshList` NO debe
+ *   evictarlo. Se limpia en cuanto el storedId aparece en la lista.
  */
 @Entity(
     tableName = "chats",
@@ -28,7 +40,10 @@ data class ChatEntity(
     val title: String = "",
     val preview: String = "",
     val startedAt: Double = 0.0,
+    val lastActive: Double = 0.0,
     val messageCount: Long = 0L,
+    val running: Boolean = false,
+    val localOnly: Boolean = false,
 )
 
 /**

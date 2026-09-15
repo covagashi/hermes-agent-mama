@@ -10,12 +10,19 @@ import kotlinx.coroutines.flow.Flow
 /** Acceso a la lista de chats cacheada (B6). */
 @Dao
 interface ChatDao {
-    /** Lista tal cual la pinta la pantalla Chats: más reciente primero (§2.3 devuelve ese orden). */
-    @Query("SELECT * FROM chats ORDER BY startedAt DESC, storedId ASC")
+    /**
+     * Lista tal cual la pinta la pantalla Chats: el orden del servidor
+     * (`effective_last_active` DESC), preservado por el rank [ChatEntity.lastActive].
+     */
+    @Query("SELECT * FROM chats ORDER BY lastActive DESC, storedId ASC")
     fun observeChats(): Flow<List<ChatEntity>>
 
     @Query("SELECT * FROM chats")
     suspend fun chats(): List<ChatEntity>
+
+    /** Tope de [ChatEntity.lastActive]: la actividad local nueva se coloca encima (`+ 1`). */
+    @Query("SELECT COALESCE(MAX(lastActive), 0.0) FROM chats")
+    suspend fun maxLastActive(): Double
 
     @Query("SELECT * FROM chats WHERE storedId = :storedId LIMIT 1")
     suspend fun findByStoredId(storedId: String): ChatEntity?
@@ -28,12 +35,6 @@ interface ChatDao {
 
     @Upsert
     suspend fun upsertAll(chats: List<ChatEntity>)
-
-    @Query("UPDATE chats SET runtimeId = :runtimeId WHERE storedId = :storedId")
-    suspend fun setRuntimeId(
-        storedId: String,
-        runtimeId: String?,
-    )
 
     /** Filas actualizadas (0 si el storedId no está cacheado). */
     @Query("UPDATE chats SET title = :title WHERE storedId = :storedId")
@@ -60,10 +61,6 @@ interface MessageDao {
     /** Transcript en orden de inserción (= orden del transcript; ver [MessageEntity.rowId]). */
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY rowId ASC")
     fun observeMessages(chatId: String): Flow<List<MessageEntity>>
-
-    /** Lectura puntual del transcript (mismo orden que [observeMessages]). */
-    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY rowId ASC")
-    suspend fun messagesFor(chatId: String): List<MessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(messages: List<MessageEntity>)

@@ -814,6 +814,16 @@ registrar controlador). Sirve para detectar drift real del backend.
    (`tools/browser_tool.py`). Un snapshot con texto con forma de secreto (`sk-…`,
    `password=…`) llega al modelo sin redactar. Fix de backend: post-procesar
    `browser.controller.result` en el broker con el mismo redactor — no parcheable desde la app.
+9. **`session.list` no expone `effective_last_active`** (encontrado en B6): la lista llega ya
+   ordenada por actividad, pero el wire no trae el timestamp — la app guarda la posición como
+   un rank local (`ChatEntity.lastActive`) que se rompe si el servidor reordena entre listados
+   o si otro cliente reordena mientras la app está offline. Si el backend expone el campo en el
+   contrato, el rank local se puede sustituir por el dato real.
+10. **`session.create` no persiste fila en `state.db` hasta el primer `prompt.submit`**
+    (encontrado en B6): el chat existe vivo en el gateway pero `session.list` no lo devuelve,
+    así que un refresh ingenuo lo evictaría — la app lo marca `localOnly` hasta que el servidor
+    lo liste. Si el backend persistiera el draft al crear (o lo incluyera en `session.list`
+    marcado como tal), el flag y la excepción del refresh desaparecerían.
 
 ---
 
