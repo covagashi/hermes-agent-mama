@@ -112,6 +112,13 @@ class ServerUrlTest {
     }
 
     @Test
+    fun `userinfo en la url devuelve null - la contrasena tiene su campo`() {
+        assertNull(normalizeServerUrl("https://usuario:secreto@hermes.example.invalid"))
+        assertNull(normalizeServerUrl("usuario:secreto@hermes.example.invalid"))
+        assertNull(normalizeServerUrl("usuario@hermes.example.invalid"))
+    }
+
+    @Test
     fun `la url normalizada sigue siendo una HttpUrl usable`() {
         val url = normalizeServerUrl("10.0.2.2:8399")
         assertTrue(url != null && url.port == 8399 && url.host == "10.0.2.2")

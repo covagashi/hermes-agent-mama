@@ -19,6 +19,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  *
  * Devuelve la [HttpUrl] base lista para `BasicAuthSession`, o `null` si la
  * entrada no parece una dirección (el ViewModel pinta "revisa la dirección").
+ * Userinfo (`user:pass@host`) se rechaza: la contraseña tiene su propio campo
+ * y un `serverBaseUrl` con secreto se persistiría/prellenaría en claro (§8).
  */
 fun normalizeServerUrl(input: String): HttpUrl? {
     val trimmed = input.trim()
@@ -28,17 +30,20 @@ fun normalizeServerUrl(input: String): HttpUrl? {
             trimmed
                 .toHttpUrlOrNull()
                 ?.takeIf { it.scheme == SCHEME_HTTP || it.scheme == SCHEME_HTTPS }
+                ?.takeIf(::sinUserinfo)
         else -> {
             val host = trimmed.substringBefore('/').substringBefore(':')
             if (host.isEmpty()) {
                 null
             } else {
                 val scheme = if (isCleartextAllowedHost(host)) SCHEME_HTTP else SCHEME_HTTPS
-                "$scheme://$trimmed".toHttpUrlOrNull()
+                "$scheme://$trimmed".toHttpUrlOrNull()?.takeIf(::sinUserinfo)
             }
         }
     }
 }
+
+private fun sinUserinfo(url: HttpUrl): Boolean = url.encodedUsername.isEmpty() && url.encodedPassword.isEmpty()
 
 private const val SCHEME_HTTP = "http"
 private const val SCHEME_HTTPS = "https"
