@@ -12,7 +12,9 @@ import ai.hermes.mama.gateway.GatewayClient
 import ai.hermes.mama.testing.FakeGateway
 import ai.hermes.mama.testing.FakeGatewayScript
 import android.content.Context
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
@@ -29,10 +31,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.After
@@ -40,6 +45,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+
+private const val TAG = "C4ChatTest"
 
 /**
  * Test instrumentado de C4 (emulador API 35): la pantalla Chat contra el
@@ -78,6 +85,9 @@ class ChatScreenInstrumentedTest {
                 onBeforeConnect = { ConnectParams(url = gateway.wsUrl) },
             ).also { it.connect() }
 
+        // `shareIn` (revisor): el flow frío creaba un repo+client POR colector —
+        // `first()` dejaba un repo zombi colectando `channel.events` y escribiendo
+        // Room en paralelo al repo que liga el VM.
         val generations = chatGenerations(manager, db, scope)
         val generation = runBlocking { generations.first() }
         val storedId = runBlocking { generation.repository.create(title = null).storedId }
@@ -87,7 +97,9 @@ class ChatScreenInstrumentedTest {
                 generations = generations,
                 scope = scope,
                 connectionState = manager.state,
+                logger = { Log.w(TAG, it) },
             )
+        scope.launch { viewModel.notices.collect { notice -> Log.w(TAG, "notice: $notice") } }
         composeRule.setContent {
             MamaTheme {
                 ChatScreen(viewModel = viewModel, onBack = {})
@@ -122,7 +134,16 @@ class ChatScreenInstrumentedTest {
         waitForText("hola")
 
         // Subtítulo "escribiendo" y chip de actividad durante el turno.
-        waitForText(string(R.string.chat_typing))
+        try {
+            waitForText(string(R.string.chat_typing))
+        } catch (e: ComposeTimeoutException) {
+            throw AssertionError(
+                "typing nunca apareció: streaming=${viewModel.liveStreaming.value} " +
+                    "activity=${viewModel.activity.value} offline=${viewModel.offline.value} " +
+                    "items=${viewModel.items.value.size} header=${viewModel.header.value}",
+                e,
+            )
+        }
         waitForText(string(R.string.chat_activity_web))
 
         // El texto fluye y el complete deja la burbuja final.
@@ -163,7 +184,11 @@ class ChatScreenInstrumentedTest {
     }
 }
 
-/** Una [ChatGeneration] por canal `Connected` — la misma fusión que `DevChatHost`. */
+/**
+ * Una [ChatGeneration] por canal `Connected` — la misma fusión que `DevChatHost`,
+ * pero `shareIn` la hace caliente: el `map` (que crea repo+client y abre el
+ * colector de eventos) corre UNA vez por canal, no por colector.
+ */
 private fun chatGenerations(
     manager: ConnectionManager,
     db: MamaDatabase,
@@ -181,7 +206,8 @@ private fun chatGenerations(
                         gateway = SessionGateway.from(client),
                         db = db,
                         scope = scope,
+                        logger = { Log.w(TAG, "repo: $it") },
                     ),
                 client = client,
             )
-        }
+        }.shareIn(scope, SharingStarted.Eagerly, replay = 1)
