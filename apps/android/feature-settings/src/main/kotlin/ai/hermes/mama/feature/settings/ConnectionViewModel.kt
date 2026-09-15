@@ -35,7 +35,13 @@ data class ConnectionUiState(
     val readAloud: Boolean = DataStoreConnectionSettings.DEFAULT_READ_ALOUD,
     val checking: Boolean = false,
     val banner: ConnectionBanner? = null,
-)
+) {
+    // §8: la contraseña nunca sale en toString — el estado puede acabar en logs.
+    override fun toString(): String =
+        "ConnectionUiState(server=$server, username=$username, password=•••, " +
+            "passwordVisible=$passwordVisible, readAloud=$readAloud, " +
+            "checking=$checking, banner=$banner)"
+}
 
 /** Banner de estado bajo el formulario (éxito o razón de error humano). */
 sealed interface ConnectionBanner {

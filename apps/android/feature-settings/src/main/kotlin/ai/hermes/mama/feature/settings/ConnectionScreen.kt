@@ -420,12 +420,21 @@ private fun ReadAloudRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    // El toggleable vive en la fila entera: objetivo táctil ≥56 dp y TalkBack
+    // anuncia "Leer las respuestas en voz alta, interruptor" (mergeDescendants).
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = MamaDimens.MinTouchTarget)
-                .padding(vertical = 6.dp),
+                .semantics(mergeDescendants = true) {}
+                .padding(vertical = 6.dp)
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange,
+                ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -435,20 +444,19 @@ private fun ReadAloudRow(
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(12.dp))
-        MamaSwitch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
+        MamaSwitch(checked = checked, enabled = enabled)
     }
 }
 
 /**
  * Interruptor del tamaño del mockup (64×36 dp, pulgar 28 dp) — más grande que
- * el Switch M3 estándar, acorde al objetivo táctil de la app. `toggleable`
- * con `Role.Switch` da la semántica "interruptor" completa para TalkBack.
+ * el Switch M3 estándar. Es sólo visual: la interacción y la semántica
+ * `Role.Switch` viven en la fila que lo contiene ([ReadAloudRow]).
  */
 @Composable
 private fun MamaSwitch(
     checked: Boolean,
     enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val trackColor by animateColorAsState(
@@ -468,13 +476,7 @@ private fun MamaSwitch(
         modifier =
             Modifier
                 .size(width = 64.dp, height = 36.dp)
-                .background(trackColor, RoundedCornerShape(18.dp))
-                .toggleable(
-                    value = checked,
-                    enabled = enabled,
-                    role = Role.Switch,
-                    onValueChange = onCheckedChange,
-                ),
+                .background(trackColor, RoundedCornerShape(18.dp)),
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(

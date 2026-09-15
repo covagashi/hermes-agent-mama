@@ -8,10 +8,12 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 
 /**
  * Preferencias no secretas de Conexión (ROADMAP §1: DataStore para ajustes).
@@ -67,31 +69,35 @@ class DataStoreConnectionSettings(
             .map { prefs -> prefs[KEY_READ_ALOUD] ?: DEFAULT_READ_ALOUD }
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_READ_ALOUD)
 
-    override suspend fun loadCredentials(): StoredCredentials? {
-        // Las tres claves se leen juntas: un par de credenciales a medias
-        // (falta alguna clave) no vale — se comporta como "sin credenciales".
-        val server = secureStore.load(KEY_SERVER_URL)
-        val username = secureStore.load(KEY_USERNAME)
-        val password = secureStore.load(KEY_PASSWORD)
-        return if (server == null || username == null || password == null) {
-            null
-        } else {
-            StoredCredentials(serverBaseUrl = server, username = username, password = password)
+    override suspend fun loadCredentials(): StoredCredentials? =
+        // SecureStore hace commit() síncrono + AES: disco, fuera del hilo main.
+        withContext(Dispatchers.IO) {
+            // Las tres claves se leen juntas: un par de credenciales a medias
+            // (falta alguna clave) no vale — se comporta como "sin credenciales".
+            val server = secureStore.load(KEY_SERVER_URL)
+            val username = secureStore.load(KEY_USERNAME)
+            val password = secureStore.load(KEY_PASSWORD)
+            if (server == null || username == null || password == null) {
+                null
+            } else {
+                StoredCredentials(serverBaseUrl = server, username = username, password = password)
+            }
         }
-    }
 
     /** Las tres claves se escriben juntas: un par de credenciales a medias jamás se carga. */
-    override suspend fun saveCredentials(credentials: StoredCredentials) {
-        secureStore.store(KEY_SERVER_URL, credentials.serverBaseUrl)
-        secureStore.store(KEY_USERNAME, credentials.username)
-        secureStore.store(KEY_PASSWORD, credentials.password)
-    }
+    override suspend fun saveCredentials(credentials: StoredCredentials) =
+        withContext(Dispatchers.IO) {
+            secureStore.store(KEY_SERVER_URL, credentials.serverBaseUrl)
+            secureStore.store(KEY_USERNAME, credentials.username)
+            secureStore.store(KEY_PASSWORD, credentials.password)
+        }
 
-    override suspend fun clearCredentials() {
-        secureStore.store(KEY_SERVER_URL, null)
-        secureStore.store(KEY_USERNAME, null)
-        secureStore.store(KEY_PASSWORD, null)
-    }
+    override suspend fun clearCredentials() =
+        withContext(Dispatchers.IO) {
+            secureStore.store(KEY_SERVER_URL, null)
+            secureStore.store(KEY_USERNAME, null)
+            secureStore.store(KEY_PASSWORD, null)
+        }
 
     override suspend fun setReadAloud(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[KEY_READ_ALOUD] = enabled }
