@@ -52,6 +52,8 @@ roborazzi {
 dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
+    // C3: la lista de Chats se alimenta de SessionRepository (Room + red).
+    implementation(project(":core-storage"))
     implementation(project(":core-ui"))
     // C7: el micrófono de la tarjeta de pregunta usa SpeechInput (D1).
     implementation(project(":feature-voice"))
@@ -109,6 +111,8 @@ dependencies {
 
     // C7: flujo E2E instrumentado — FakeGateway (kotlin-jvm, corre en el
     // dispositivo) + la tarjeta real en Compose (misma pila que los tests JVM).
+    // C3: instrumentación de la pantalla Chats — host propio (ChatsTestActivity)
+    // y FakeGateway en proceso, sin red real (misma pila que feature-browser).
     androidTestImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la pantalla Chats (C3, mockup Main.dc.html). Español simple,
+     sin tecnicismos: "sesión" → "chat", "gateway" → "Hermes" (ROADMAP §3).
+     Fichero propio por pantalla para no chocar con PRs paralelos (§4). -->
+<resources>
+    <!-- Barra superior del mockup: nombre de la app. -->
+    <string name="chats_screen_title">Hermes</string>
+    <!-- Botón grande inferior (64 dp, píldora verde). -->
+    <string name="chats_new_chat">Nuevo chat</string>
+    <!-- Título que recibe el chat recién creado; %1$s = fecha ("15 de septiembre").
+         Hermes lo renombra después vía session.title. -->
+    <string name="chats_new_chat_title">Chat de %1$s</string>
+    <!-- Fila de un chat todavía sin título. -->
+    <string name="chats_untitled">Chat nuevo</string>
+
+    <!-- Estado vacío (mockup: sólo se ve si no hay ningún chat). -->
+    <string name="chats_empty_title">Aún no hay chats</string>
+    <string name="chats_empty_body">Pulsa «Nuevo chat» y cuéntale a Hermes qué necesitas.</string>
+
+    <!-- Franja de conexión (sólo visible cuando falla, ROADMAP §3). -->
+    <string name="chats_banner_reconnecting">Sin conexión. Reintentando…</string>
+    <string name="chats_banner_disconnected">Sin conexión.</string>
+    <string name="chats_banner_failed">No puedo hablar con Hermes. Revisa la conexión.</string>
+
+    <!-- Botón "?" de la barra superior: ayuda en una frase. -->
+    <string name="chats_help_button">Ayuda</string>
+    <string name="chats_help_title">¿Qué puedo hacer aquí?</string>
+    <string name="chats_help_body">Estos son tus chats con Hermes. Toca uno para seguir hablando, o pulsa «Nuevo chat» para empezar uno. Si deslizas un chat hacia la izquierda puedes borrarlo.</string>
+    <string name="chats_help_ok">Vale</string>
+
+    <!-- Borrado: fondo del swipe, diálogo de confirmación y acción de TalkBack. -->
+    <string name="chats_delete_action">Borrar</string>
+    <string name="chats_delete_title">¿Borrar este chat?</string>
+    <string name="chats_delete_body">Se borrará «%1$s» y todo lo que habéis hablado. No se puede deshacer.</string>
+    <string name="chats_delete_confirm">Borrar</string>
+    <string name="chats_delete_cancel">Conservar</string>
+    <!-- Acción accesible en la fila (TalkBack no hace swipes): %1$s = título. -->
+    <string name="chats_delete_row_action">Borrar el chat %1$s</string>
+
+    <!-- Punto verde del mockup: el chat tiene a Hermes trabajando. -->
+    <string name="chats_running">Hermes está trabajando en este chat</string>
+
+    <!-- Etiquetas de tiempo de la fila (mockup: "10:24", "Ayer", "Lun", "3 sep"). -->
+    <string name="chats_time_yesterday">Ayer</string>
+
+    <!-- Avisos de una sola vez (snackbar) cuando una acción no sale. -->
+    <string name="chats_notice_create_failed">No pude crear el chat. Prueba otra vez.</string>
+    <string name="chats_notice_open_failed">No pude abrir el chat. Prueba otra vez.</string>
+    <string name="chats_notice_delete_failed">No pude borrar el chat. Prueba otra vez.</string>
+    <string name="chats_notice_refresh_failed">No pude actualizar la lista. Sigue sin conexión.</string>
+
+    <!-- Ejemplos para previews y capturas de Roborazzi (datos ficticios). -->
+    <string name="chats_example_title_1">Factura de la lavadora</string>
+    <string name="chats_example_preview_1">He guardado la factura en Descargas</string>
+    <string name="chats_example_title_2">Correo</string>
+    <string name="chats_example_preview_2">Tienes 2 correos nuevos de la farmacia</string>
+    <string name="chats_example_title_3">Recetas</string>
+    <string name="chats_example_preview_3">Lentejas con verduras: 40 minutos</string>
+    <string name="chats_example_title_4">Cita del médico</string>
+    <string name="chats_example_preview_4">Miércoles 24 a las 9:30, lleva la tarjeta</string>
+    <string name="chats_example_time_1">10:24</string>
+    <string name="chats_example_time_2">Ayer</string>
+    <string name="chats_example_time_3">Lun</string>
+    <string name="chats_example_time_4">3 sep</string>
+</resources>
