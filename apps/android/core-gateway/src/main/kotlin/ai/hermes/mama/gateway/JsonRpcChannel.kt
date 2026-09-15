@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -115,6 +116,10 @@ class JsonRpcChannel(
      * una petición que nadie recoge recibe `-32601` automático.
      */
     val serverRequests: SharedFlow<ServerRequest> = _serverRequests.asSharedFlow()
+
+    /** Suscriptores vivos de [serverRequests] — diagnóstico/tests (B4 verifica que su colector se desuscribe). */
+    internal val serverRequestSubscriptionCount: StateFlow<Int>
+        get() = _serverRequests.subscriptionCount
 
     /** `true` tras [close] o muerte por heartbeat/transporte/scope. */
     val isClosed: Boolean

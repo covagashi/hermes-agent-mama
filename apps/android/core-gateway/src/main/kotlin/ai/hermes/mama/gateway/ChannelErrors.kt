@@ -1,5 +1,6 @@
 package ai.hermes.mama.gateway
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlin.time.Duration
 
@@ -34,3 +35,21 @@ class HeartbeatTimeoutException(
     val deadline: Duration,
     cause: Throwable? = null,
 ) : ChannelClosedException("no gateway response within ${deadline.inWholeSeconds}s heartbeat deadline", cause)
+
+/**
+ * Un `result` del gateway no decodifica al schema del contrato (DTO generado en
+ * `core-contract`): protocolo roto o contrato desactualizado.
+ *
+ * §8: [decodeError] es la [SerializationException] original — su mensaje puede
+ * incrustar el fragmento JSON del result (con texto de transcripts dentro):
+ * NUNCA a logs ni UI, sólo diagnóstico en desarrollo. `cause` lleva una
+ * versión saneada (sólo el tipo de la excepción), así un `printStackTrace` o
+ * un log del caller no vuelca contenido del wire.
+ */
+class ResultDecodeException(
+    val method: String,
+    val decodeError: SerializationException,
+) : ChannelException(
+        "gateway result does not match the contract schema: $method",
+        SerializationException(decodeError::class.simpleName.toString()),
+    )
