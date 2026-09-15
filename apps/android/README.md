@@ -134,3 +134,48 @@ Los mismos fixtures se verifican en un WebView real con
 |---|---|---|
 | `dev` | `ai.hermes.mama.dev` | `fake_script`, cleartext a `10.0.2.2`, logs de red |
 | `mama` | `ai.hermes.mama` | la usuaria; sin override ni cleartext |
+
+## Release e instalación (J1)
+
+**Para la usuaria** la guía paso a paso está en [`INSTALACION.md`](INSTALACION.md):
+descargar `app-mama-release.apk` de la GitHub Release, permitir «instalar apps
+desconocidas» en el navegador y abrir.
+
+**Para quien mantiene el repo**, publicar una release es empujar un tag:
+
+```bash
+git tag android-v0.9.<n> && git push origin android-v0.9.<n>
+```
+
+El tag `android-v*` dispara `.github/workflows/release.yml`, que:
+
+1. compila `:app:assembleMamaRelease` + `:app:bundleMamaRelease`
+   (`versionCode` = `GITHUB_RUN_NUMBER`, `versionName` = `0.9.<run>` — §4);
+2. verifica el APK con `apksigner verify` y el AAB con `bundletool validate`;
+3. intenta subir el AAB a la **pista interna de Google Play** — sólo si existe
+   el secreto `PLAY_SERVICE_ACCOUNT_JSON` y la firma release está configurada;
+   `continue-on-error`: si Play rechaza la app, el resto sigue (§9.5);
+4. adjunta **siempre** `app-mama-release.apk` y `app-mama-release.aab` a la
+   GitHub Release del tag (fallback sideload).
+
+### Firma (secretos de CI — NUNCA en el repo)
+
+`signingConfigs.release` de `app/build.gradle.kts` lee variables de entorno:
+
+| Variable | Contenido |
+|---|---|
+| `ANDROID_KEYSTORE_B64` | el `.jks` en base64 (`base64 -i mama-release.jks`) — CI lo materializa en `$RUNNER_TEMP` |
+| `ANDROID_KEYSTORE_FILE` | alternativa: ruta a un `.jks` ya materializado (la usa CI; en local admite un keystore de prueba fuera del repo) |
+| `ANDROID_KEYSTORE_PASSWORD` | contraseña del keystore |
+| `ANDROID_KEY_ALIAS` | alias de la clave |
+| `ANDROID_KEY_PASSWORD` | contraseña de la clave |
+| `PLAY_SERVICE_ACCOUNT_JSON` | JSON de la cuenta de servicio de Play (opcional; sin él se omite la subida a Play) |
+
+Si falta cualquiera de las cuatro de firma, `release` se firma con la clave de
+**debug** (fallback documentado): el APK queda instalable por sideload pero no
+es apto para Play. El keystore se genera una vez, fuera del repo:
+
+```bash
+keytool -genkeypair -v -keystore /tmp/mama-release.jks -alias mama \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
