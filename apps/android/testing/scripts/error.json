@@ -1,0 +1,30 @@
+{
+  "name": "error",
+  "description": "Turno que acaba en message.complete con error (burbuja de error amable). Un prompt con 'boom' recibe además error JSON-RPC en prompt.submit.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-error-1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "boom" },
+      "submit_error": { "code": -32000, "message": "prompt exploded (fake)" }
+    },
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Mmm… " },
+        {
+          "event": "message.complete",
+          "payload": {
+            "status": "error",
+            "error": "El modelo no respondió a tiempo (fake)",
+            "failure_reason": "model_error"
+          }
+        }
+      ]
+    }
+  ]
+}

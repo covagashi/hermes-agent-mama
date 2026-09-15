@@ -1,0 +1,22 @@
+{
+  "name": "renombra",
+  "description": "El servidor renombra el chat en mitad del turno (session_title → evento session.title con el STORED id + sessions.changed) — para probar el rename automático de C3.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-renombra-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Déjame pensar un título… " },
+        { "sleep_ms": 300 },
+        { "session_title": "Pedido de la semana" },
+        { "delta": "ya está, le puse nombre a nuestra conversación." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

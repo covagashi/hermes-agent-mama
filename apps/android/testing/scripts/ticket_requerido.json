@@ -1,0 +1,20 @@
+{
+  "name": "ticket_requerido",
+  "description": "require_ws_ticket=true: /api/ws SIN ?ticket= se acepta el upgrade y se cierra con code 4401 (auth: no_credential), como el backend gated. Con ticket válido funciona el turno hola.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "require_ws_ticket": true,
+  "replay_epoch": "epoch-ticket-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Entraste con ticket." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

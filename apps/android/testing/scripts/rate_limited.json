@@ -1,0 +1,12 @@
+{
+  "name": "rate_limited",
+  "description": "Todo password-login responde 429 Too Many Requests con Retry-After — para probar la pantalla de Conexión en B3 (rate limit del backend).",
+  "auth": {
+    "username": "usuario",
+    "password": "mama",
+    "rate_limited": true
+  },
+  "replay_epoch": "epoch-ratelimit-1",
+  "sessions": [],
+  "turns": []
+}

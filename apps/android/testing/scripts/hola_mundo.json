@@ -1,0 +1,46 @@
+{
+  "name": "hola_mundo",
+  "description": "Guion mínimo: un chat semilla, 'hola' → message.start + 3 deltas + message.complete. Es el guion por defecto de `:testing:run`.",
+  "auth": {
+    "provider": "basic",
+    "username": "usuario",
+    "password": "mama",
+    "user_id": "u_fake_usuario",
+    "display_name": "Usuario de Prueba",
+    "email": "usuario@hermes.example.invalid"
+  },
+  "replay_epoch": "epoch-hola-1",
+  "sessions": [
+    {
+      "id": "stored_hola",
+      "runtime_id": "sess_hola",
+      "title": "Pedidos y facturas",
+      "preview": "Sí, llegó ayer por la tarde.",
+      "started_at": 1757000000.0,
+      "source": "android",
+      "messages": [
+        { "role": "user", "text": "¿Llegó mi pedido?", "timestamp": 1757000000.0, "row_id": 1 },
+        { "role": "assistant", "text": "Sí, llegó ayer por la tarde.", "timestamp": 1757000001.0, "row_id": 2 }
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "when": { "text_contains": "hola" },
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "¡Hola! " },
+        { "delta": "¿Qué tal " },
+        { "delta": "estás hoy?" },
+        { "event": "message.complete", "payload": { "text": "¡Hola! ¿Qué tal estás hoy?", "status": "complete" } }
+      ]
+    }
+  ],
+  "default_turn": {
+    "steps": [
+      { "event": "message.start" },
+      { "delta": "He recibido tu mensaje." },
+      { "event": "message.complete", "payload": { "status": "complete" } }
+    ]
+  }
+}

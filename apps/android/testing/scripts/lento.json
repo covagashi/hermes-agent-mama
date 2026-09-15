@@ -1,0 +1,33 @@
+{
+  "name": "lento",
+  "description": "Turno largo con pausas de 1,5 s entre deltas: para probar Parar (session.interrupt), reconexión en medio de un turno y close_socket.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-lento-1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "corta" },
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Cierro el socket ahora." },
+        { "close_socket": { "code": 1001, "reason": "fake reconnect" } }
+      ]
+    },
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Esto va a tardar… " },
+        { "sleep_ms": 1500 },
+        { "delta": "sigo… " },
+        { "sleep_ms": 1500 },
+        { "delta": "casi… " },
+        { "sleep_ms": 1500 },
+        { "delta": "listo." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

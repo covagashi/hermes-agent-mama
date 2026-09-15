@@ -1,0 +1,22 @@
+{
+  "name": "browser_off",
+  "description": "browser.extension_control.enabled=false: cualquier browser.controller.* falla cerrado con 4403, como el backend con el flag apagado (F3 → ServerNotEnabled).",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "browser": {
+    "enabled": false
+  },
+  "replay_epoch": "epoch-boff-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Sin navegador: el flag está apagado." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "browser",
+  "description": "Flujo del navegador visible (§2.6): el cliente registra el controlador, el guion emite navigate + snapshot + click y espera cada browser.controller.result.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-browser-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "event": "tool.start", "payload": { "tool_id": "tool-br-1", "name": "browser_navigate", "context": "abriendo la web…" } },
+        { "browser_command": { "action": "browser_navigate", "arguments": { "url": "https://tienda.example.invalid/pedidos" } } },
+        { "browser_command": { "action": "browser_snapshot", "arguments": { "full": false } } },
+        { "browser_command": { "action": "browser_click", "arguments": { "ref": "@e3" } } },
+        { "event": "browser.progress", "payload": { "message": "Factura encontrada", "level": "info" } },
+        { "event": "tool.complete", "payload": { "tool_id": "tool-br-1", "name": "browser_navigate", "summary": "factura localizada" } },
+        { "delta": "Ya está: abrí tus pedidos y pulsé en la factura." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "name": "clarify",
+  "description": "El turno hace una pregunta por lotes (clarify con dos qid) y espera {answers:{qid:…}}; un prompt con 'una' hace una pregunta simple {answer}.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-clarify-1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "una" },
+      "steps": [
+        { "event": "message.start" },
+        {
+          "request": {
+            "method": "clarify",
+            "params": {
+              "question": "¿Lo quieres en rojo o en azul?",
+              "choices": ["rojo", "azul"]
+            }
+          }
+        },
+        { "delta": "Perfecto, anotado." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    },
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Te hago un par de preguntas." },
+        {
+          "request": {
+            "method": "clarify",
+            "params": {
+              "questions": [
+                { "qid": "color", "question": "¿De qué color lo quieres?", "choices": ["rojo", "azul", "verde"] },
+                { "qid": "cuando", "question": "¿Para cuándo lo necesitas?" }
+              ]
+            }
+          }
+        },
+        { "delta": "Gracias, ya lo tengo todo." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}
