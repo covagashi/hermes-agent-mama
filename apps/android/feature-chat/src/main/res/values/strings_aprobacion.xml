@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la tarjeta de aprobación (C6, mockup Aprobacion.dc.html).
+     Español simple para una persona mayor: "Hermes quiere…" + la acción en
+     lenguaje llano; nunca nombres de herramientas ni tecnicismos (ROADMAP §3). -->
+<resources>
+    <!-- Título de la tarjeta según el tipo de acción (tool_name humanizado). -->
+    <string name="approval_kind_generic">Hermes quiere hacer esto</string>
+    <string name="approval_kind_send_email">Hermes quiere enviar un correo</string>
+    <string name="approval_kind_email">Hermes quiere usar tu correo</string>
+    <string name="approval_kind_browser">Hermes quiere abrir una página web</string>
+    <string name="approval_kind_terminal">Hermes quiere ejecutar una orden</string>
+    <string name="approval_kind_files">Hermes quiere usar tus archivos</string>
+
+    <!-- Botones Sí / No (64 dp, del mockup). -->
+    <string name="approval_yes">Sí, adelante</string>
+    <string name="approval_no">No</string>
+
+    <!-- Pista tranquilizadora bajo los botones (del mockup). -->
+    <string name="approval_hint">Si no estás segura, pulsa “No”. No pasa nada.</string>
+
+    <!-- Estado ya respondida: la tarjeta muestra la elección un momento. -->
+    <string name="approval_answered_yes">Has dicho que sí.</string>
+    <string name="approval_answered_no">Has dicho que no. No pasa nada.</string>
+
+    <!-- Error al enviar la respuesta (socket caído / timeout): los botones
+         siguen activos para reintentar. -->
+    <string name="approval_send_failed">No pude enviar tu respuesta. Prueba otra vez.</string>
+
+    <!-- Aviso de petición no soportada (§2.5): %1$s = helper_name. -->
+    <string name="helper_name">tu persona de confianza</string>
+    <string name="approval_unsupported">Hermes necesita algo que esta app no puede dar; pídeselo a %1$s.</string>
+
+    <!-- Ejemplos para previews y capturas de Roborazzi (datos ficticios). -->
+    <string name="approval_example_detail">Enviar un correo a Farmacia del Barrio con la receta de este mes</string>
+</resources>

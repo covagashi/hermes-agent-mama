@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.roborazzi)
 }
 
 // Pantallas Chats + Chat + Aprobaciones/Clarify (hito M2).
@@ -39,9 +40,21 @@ kotlin {
     }
 }
 
+// Referencias de capturas en apps/android/screenshots/ (ROADMAP §7.1), igual
+// que en :core-ui:
+//   ./gradlew :feature-chat:recordRoborazzi  → graba/actualiza PNGs
+//   ./gradlew :feature-chat:verifyRoborazzi  → compara contra las referencias
+roborazzi {
+    outputDir.set(rootProject.layout.projectDirectory.dir("screenshots"))
+}
+
 dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
+    implementation(project(":core-ui"))
+
+    implementation(libs.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
 
     // E2: FileAttacher (suspend + Dispatchers inyectados) y logs §8.
     implementation(libs.coroutines.core)
@@ -51,6 +64,7 @@ dependencies {
 
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
@@ -75,8 +89,26 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
     // Vintage: permite tests JUnit4 en JVM (p. ej. Robolectric/Room de B6).
     testRuntimeOnly(libs.junit.vintage.engine)
+
+    // Robolectric + Compose UI Test + Roborazzi (misma pila que :core-ui):
+    // capturas a 390 dp, AccessibilityChecks y fuente 2.0×.
+    testImplementation(libs.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.activity.compose)
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.espresso.core)
+    testImplementation(libs.espresso.accessibility)
+    testImplementation(libs.a11y.test.framework)
 }
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Los filePath relativos de captureRoboImage se resuelven contra
+    // roborazzi.output.dir (= screenshots/ al grabar/verificar), no el cwd.
+    systemProperty(
+        "roborazzi.record.filePathStrategy",
+        "relativePathFromRoborazziContextOutputDirectory",
+    )
 }
