@@ -34,19 +34,27 @@ suspend fun GatewayClient.pendingApprovals(sessionId: String): ApprovalPendingRe
 suspend fun GatewayClient.respondApproval(params: ApprovalRespondParams): ApprovalRespondResult =
     rpc(RpcMethods.APPROVAL_RESPOND, params, ApprovalRespondParams.serializer(), ApprovalRespondResult.serializer())
 
-/** `approval.respond` por `request_id` con la elección tipada. */
+/**
+ * `approval.respond` por `request_id` con la elección tipada — §2.5: la app
+ * sólo ofrece Sí (`once`) / No (`deny`); `always`/`session` no existen en la
+ * UI y aquí se rechazan antes de salir al wire.
+ */
 suspend fun GatewayClient.respondApproval(
     sessionId: String,
     requestId: String,
     choice: ApprovalChoice,
-): ApprovalRespondResult =
-    respondApproval(
+): ApprovalRespondResult {
+    require(choice == ApprovalChoice.ONCE || choice == ApprovalChoice.DENY) {
+        "la app sólo responde once/deny (§2.5): choice=$choice"
+    }
+    return respondApproval(
         ApprovalRespondParams(
             sessionId = sessionId,
             requestId = requestId,
             choice = choice.wireName(),
         ),
     )
+}
 
 /** `request.answer` — responde una petición que llegó como replay (`open_requests`), §2.3. */
 suspend fun GatewayClient.answerRequest(params: RequestAnswerParams): RequestAnswerResult =

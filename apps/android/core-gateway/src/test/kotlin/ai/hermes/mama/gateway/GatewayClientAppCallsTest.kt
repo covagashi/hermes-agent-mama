@@ -7,10 +7,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Sobrecargas "forma de la app" (§2.3/§2.6): los argumentos sueltos fijan
@@ -93,6 +94,23 @@ class GatewayClientAppCallsTest {
         }
 
     @Test
+    fun `respondApproval rechaza always y session - la app solo Si o No`() =
+        runTest {
+            val transport = FakeTransport()
+            val client = newGatewayClient(transport)
+
+            assertIs<IllegalArgumentException>(
+                runCatching { client.respondApproval("sess-1", "req-42", ApprovalChoice.ALWAYS) }
+                    .exceptionOrNull(),
+            )
+            assertIs<IllegalArgumentException>(
+                runCatching { client.respondApproval("sess-1", "req-42", ApprovalChoice.SESSION) }
+                    .exceptionOrNull(),
+            )
+            assertTrue(transport.sentFrames().isEmpty(), "nada sale al wire con un choice prohibido")
+        }
+
+    @Test
     fun `registerBrowserController fija protocol_version 1`() =
         runTest {
             val transport = FakeTransport()
@@ -124,6 +142,38 @@ class GatewayClientAppCallsTest {
             )
             transport.emit("""{"id":${idOf(frame)},"result":${fixtureText("BrowserControllerRegisterResult")}}""")
             assertEquals("mama-webview", call.await().scope.browserProfileId)
+        }
+
+    @Test
+    fun `sendBrowserControllerResult envuelve result y error como strings JSON`() =
+        runTest {
+            val transport = FakeTransport()
+            val client = newGatewayClient(transport)
+
+            val call =
+                async {
+                    client.sendBrowserControllerResult(
+                        sessionId = "sess-1",
+                        commandId = "cmd-7",
+                        ok = false,
+                        resultJson = """{"rows":[]}""",
+                        error = "sin captura",
+                    )
+                }
+            runCurrent()
+
+            // §2.6: `result`/`error` viajan como STRING (JSON de las
+            // herramientas locales), nunca como objeto JsonElement.
+            val frame = transport.sentFrames().single()
+            assertEquals(
+                testJson.parseToJsonElement(
+                    """{"session_id":"sess-1","command_id":"cmd-7","ok":false,""" +
+                        """"result":"{\"rows\":[]}","error":"sin captura"}""",
+                ),
+                frame.getValue("params"),
+            )
+            transport.emit("""{"id":${idOf(frame)},"result":{"accepted":true}}""")
+            assertTrue(call.await().accepted)
         }
 
     @Test

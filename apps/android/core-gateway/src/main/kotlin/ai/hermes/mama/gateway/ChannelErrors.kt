@@ -38,11 +38,18 @@ class HeartbeatTimeoutException(
 
 /**
  * Un `result` del gateway no decodifica al schema del contrato (DTO generado en
- * `core-contract`): protocolo roto o contrato desactualizado. La causa es la
- * [SerializationException] original (su mensaje puede incrustar el input — §8:
- * no va a logs ni UI, sólo como `cause` para diagnóstico).
+ * `core-contract`): protocolo roto o contrato desactualizado.
+ *
+ * §8: [decodeError] es la [SerializationException] original — su mensaje puede
+ * incrustar el fragmento JSON del result (con texto de transcripts dentro):
+ * NUNCA a logs ni UI, sólo diagnóstico en desarrollo. `cause` lleva una
+ * versión saneada (sólo el tipo de la excepción), así un `printStackTrace` o
+ * un log del caller no vuelca contenido del wire.
  */
 class ResultDecodeException(
     val method: String,
-    cause: SerializationException,
-) : ChannelException("gateway result does not match the contract schema: $method", cause)
+    val decodeError: SerializationException,
+) : ChannelException(
+        "gateway result does not match the contract schema: $method",
+        SerializationException(decodeError::class.simpleName.toString()),
+    )

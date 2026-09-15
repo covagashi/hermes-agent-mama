@@ -8,7 +8,6 @@ import ai.hermes.mama.contract.BrowserControllerResultParams
 import ai.hermes.mama.contract.BrowserControllerResultResult
 import ai.hermes.mama.contract.OkResult
 import ai.hermes.mama.contract.RpcMethods
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
 /*
@@ -57,23 +56,24 @@ suspend fun GatewayClient.sendBrowserControllerResult(
     )
 
 /**
- * Resultado de un comando: `result` es el string JSON con la forma de las
- * herramientas locales (§2.6) y `error` el motivo humano cuando `ok` es `false`.
+ * Resultado de un comando (§2.6): `resultJson` es el **string** JSON con la
+ * forma de las herramientas locales (no un JsonElement — el wire lo lleva como
+ * string) y `error` el motivo humano cuando `ok` es `false`.
  */
 suspend fun GatewayClient.sendBrowserControllerResult(
     sessionId: String,
     commandId: String,
     ok: Boolean,
-    result: JsonElement? = null,
-    error: JsonElement? = null,
+    resultJson: String? = null,
+    error: String? = null,
 ): BrowserControllerResultResult =
     sendBrowserControllerResult(
         BrowserControllerResultParams(
             sessionId = sessionId,
             commandId = commandId,
             ok = JsonPrimitive(ok),
-            result = result,
-            error = error,
+            result = resultJson?.let(::JsonPrimitive),
+            error = error?.let(::JsonPrimitive),
         ),
     )
 

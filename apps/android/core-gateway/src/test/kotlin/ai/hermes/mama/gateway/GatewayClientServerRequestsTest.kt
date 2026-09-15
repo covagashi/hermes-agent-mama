@@ -1,6 +1,5 @@
 package ai.hermes.mama.gateway
 
-import ai.hermes.mama.contract.RpcMethods
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -248,6 +247,26 @@ class GatewayClientServerRequestsTest {
                     .await()
                     .sessionId,
             )
+        }
+
+    @Test
+    fun `close cancela el colector y la suscripcion del canal vuelve a cero`() =
+        runTest {
+            // Generaciones de conexión sobre un scope compartido (backgroundScope
+            // sobrevive a cada close): sin el cancel del colector cada client
+            // muerto quedaría suscrito al SharedFlow del canal.
+            val clients = List(3) { newGatewayClient(FakeTransport()) }
+            runCurrent()
+            clients.forEach { client ->
+                assertEquals(1, client.channel.serverRequestSubscriptionCount.value)
+            }
+
+            clients.forEach { it.close() }
+            runCurrent()
+            clients.forEach { client ->
+                assertEquals(0, client.channel.serverRequestSubscriptionCount.value)
+                assertTrue(client.collectorJob.isCancelled)
+            }
         }
 
     @Test

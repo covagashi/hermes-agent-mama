@@ -42,12 +42,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Golden §5/B4: cada método de §2.3 serializa EXACTAMENTE los params de su
@@ -267,8 +270,48 @@ class GatewayClientRpcTest {
             val id = idOf(transport.sentFrames().single())
 
             transport.emit("""{"id":$id,"result":{"sessions":"no-es-una-lista"}}""")
-            val error = assertNotNull(call.await().exceptionOrNull())
-            assertIs<ResultDecodeException>(error)
+            val error = assertIs<ResultDecodeException>(assertNotNull(call.await().exceptionOrNull()))
             assertEquals(RpcMethods.SESSION_LIST, error.method)
+
+            // §8: ni el mensaje ni el cause encadenado llevan el fragmento del
+            // result; la SerializationException cruda queda en decodeError
+            // (diagnóstico — no loguear).
+            assertIs<SerializationException>(error.decodeError)
+            assertIs<SerializationException>(error.cause)
+            val sanitizedCause = error.cause?.message.orEmpty()
+            assertFalse(error.message.orEmpty().contains("no-es-una-lista"))
+            assertFalse(sanitizedCause.contains("no-es-una-lista"))
+        }
+
+    @Test
+    fun `un error JSON-RPC de B1 llega intacto (code y data preservados)`() =
+        runTest {
+            val transport = FakeTransport()
+            val client = newGatewayClient(transport)
+
+            val call = async { runCatching { client.listSessions() } }
+            runCurrent()
+            val id = idOf(transport.sentFrames().single())
+
+            transport.emit(
+                """{"id":$id,"error":{"code":-32000,"message":"boom","data":{"motivo":"x"}}}""",
+            )
+            val error = assertIs<JsonRpcException>(call.await().exceptionOrNull())
+            assertEquals(-32000, error.code)
+            assertEquals(testJson.parseToJsonElement("""{"motivo":"x"}"""), error.data)
+        }
+
+    @Test
+    fun `un result con claves fuera de contrato se tolera (ignoreUnknownKeys)`() =
+        runTest {
+            val transport = FakeTransport()
+            val client = newGatewayClient(transport)
+
+            val call = async { client.ping() }
+            runCurrent()
+            val id = idOf(transport.sentFrames().single())
+
+            transport.emit("""{"id":$id,"result":{"ok":true,"futuro":1}}""")
+            assertTrue(call.await().ok)
         }
 }

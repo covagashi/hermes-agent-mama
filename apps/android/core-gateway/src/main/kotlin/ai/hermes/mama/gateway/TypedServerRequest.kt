@@ -1,5 +1,3 @@
-@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-
 package ai.hermes.mama.gateway
 
 import ai.hermes.mama.contract.ApprovalChoice
@@ -8,6 +6,7 @@ import ai.hermes.mama.contract.ApprovalResult
 import ai.hermes.mama.contract.ClarifyRequestParams
 import ai.hermes.mama.contract.ClarifyResult
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Petición servidor→cliente ya clasificada por [GatewayClient] (ROADMAP §2.5,
@@ -87,8 +86,13 @@ class ClarifyRequest internal constructor(
     fun answerAll(answers: Map<String, String>): Boolean =
         raw.respond(json.encodeToJsonElement(ClarifyResult.serializer(), ClarifyResult(answers = answers)))
 
-    /** Cierra sin responder — `result` sin `answer` ni `answers` = cancel-all (doc del schema). */
-    fun dismiss(): Boolean = raw.respond(json.encodeToJsonElement(ClarifyResult.serializer(), ClarifyResult()))
+    /**
+     * Cierra sin responder — `result {}` explícito, sin `answer` ni `answers`
+     * = cancel-all (doc del schema). No depende de `explicitNulls` del Json:
+     * `ClarifyResult()` codificado con `explicitNulls = true` mandaría
+     * `{"answer":null,"answers":null}`, que no es lo mismo en el wire.
+     */
+    fun dismiss(): Boolean = raw.respond(JsonObject(emptyMap()))
 }
 
 /**

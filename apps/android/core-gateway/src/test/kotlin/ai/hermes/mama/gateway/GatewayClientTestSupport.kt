@@ -22,8 +22,8 @@ import kotlin.test.assertEquals
 internal val testJson = Json { ignoreUnknownKeys = true }
 
 // Gradle ejecuta los tests con cwd = directorio del módulo (:core-gateway).
-// Los nombres de fichero son únicos por schema, repartidos en rpc/, requests/,
-// events/ y model/ — se resuelven por nombre sin importar el subdirectorio.
+// Los nombres de fichero son únicos por schema, repartidos en rpc/, events/,
+// model/ y html/ — se resuelven por nombre sin importar el subdirectorio.
 private val fixturesRoot = File("../testing/fixtures")
 
 internal fun fixtureFile(schema: String): File {

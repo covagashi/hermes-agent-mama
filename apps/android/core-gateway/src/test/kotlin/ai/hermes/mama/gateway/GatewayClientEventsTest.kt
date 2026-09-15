@@ -5,7 +5,6 @@ import ai.hermes.mama.contract.MessageInterimPayload
 import ai.hermes.mama.contract.StreamDeltaPayload
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
