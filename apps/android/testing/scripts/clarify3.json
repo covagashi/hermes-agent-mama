@@ -1,0 +1,54 @@
+{
+  "name": "clarify3",
+  "description": "Lote clarify de tres preguntas (C7): q1 con choices, q2 multi_select y q3 de texto libre. El fake espera UN result {answers:{qid:…}}. Un prompt con 'una' hace una pregunta simple {answer}.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-clarify3-1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "una" },
+      "steps": [
+        { "event": "message.start" },
+        {
+          "request": {
+            "method": "clarify",
+            "params": {
+              "question": "¿Lo quieres en rojo o en azul?",
+              "choices": ["rojo", "azul"]
+            }
+          }
+        },
+        { "delta": "Perfecto, anotado." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    },
+    {
+      "steps": [
+        { "event": "message.start" },
+        { "delta": "Te hago tres preguntas." },
+        {
+          "request": {
+            "method": "clarify",
+            "params": {
+              "questions": [
+                { "qid": "color", "question": "¿De qué color lo quieres?", "choices": ["rojo", "azul", "verde"] },
+                {
+                  "qid": "recados",
+                  "question": "¿Qué recados hago esta tarde?",
+                  "choices": ["correo", "farmacia", "panadería"],
+                  "multi_select": true
+                },
+                { "qid": "cuando", "question": "¿Para cuándo lo necesitas?" }
+              ]
+            }
+          }
+        },
+        { "delta": "Gracias, ya lo tengo todo." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

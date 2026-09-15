@@ -12,6 +12,7 @@ android {
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -52,6 +53,8 @@ dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
     implementation(project(":core-ui"))
+    // C7: el micrófono de la tarjeta de pregunta usa SpeechInput (D1).
+    implementation(project(":feature-voice"))
 
     implementation(libs.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
@@ -101,6 +104,19 @@ dependencies {
     testImplementation(libs.espresso.core)
     testImplementation(libs.espresso.accessibility)
     testImplementation(libs.a11y.test.framework)
+
+    // C7: flujo E2E instrumentado — FakeGateway (kotlin-jvm, corre en el
+    // dispositivo) + la tarjeta real en Compose (misma pila que los tests JVM).
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.activity.compose)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.kotlinx.serialization.json)
+    // WebSocketTransport expone tipos okhttp en su firma (CookieJar/OkHttpClient).
+    androidTestImplementation(libs.okhttp)
+    androidTestImplementation(project(":testing"))
 }
 
 tasks.withType<Test>().configureEach {
