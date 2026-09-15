@@ -1,6 +1,8 @@
 package ai.hermes.mama.gateway
 
 import ai.hermes.mama.contract.RpcMethods
+import ai.hermes.mama.contract.SessionCloseParams
+import ai.hermes.mama.contract.SessionCloseResult
 import ai.hermes.mama.contract.SessionCreateParams
 import ai.hermes.mama.contract.SessionCreateResult
 import ai.hermes.mama.contract.SessionDeleteParams
@@ -51,6 +53,10 @@ suspend fun GatewayClient.renameSession(params: SessionTitleParams): SessionTitl
 /** `session.delete` — borrar (recibe el *stored* id, §2.3). */
 suspend fun GatewayClient.deleteSession(params: SessionDeleteParams): SessionDeleteResult =
     rpc(RpcMethods.SESSION_DELETE, params, SessionDeleteParams.serializer(), SessionDeleteResult.serializer())
+
+/** `session.close` — cierra una sesión runtime viva (recibe el *runtime* id). */
+suspend fun GatewayClient.closeSession(params: SessionCloseParams): SessionCloseResult =
+    rpc(RpcMethods.SESSION_CLOSE, params, SessionCloseParams.serializer(), SessionCloseResult.serializer())
 
 /** `session.interrupt` — botón «Parar». */
 suspend fun GatewayClient.interruptSession(params: SessionInterruptParams): SessionInterruptResult =

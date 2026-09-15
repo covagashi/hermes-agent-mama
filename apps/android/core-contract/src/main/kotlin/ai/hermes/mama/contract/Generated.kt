@@ -27,6 +27,7 @@ object RpcMethods {
     const val SESSION_HISTORY = "session.history"
     const val SESSION_TITLE = "session.title"
     const val SESSION_DELETE = "session.delete"
+    const val SESSION_CLOSE = "session.close"
     const val SESSION_INTERRUPT = "session.interrupt"
     const val SESSION_EVENTS_SINCE = "session.events.since"
     const val PROMPT_SUBMIT = "prompt.submit"
@@ -156,6 +157,8 @@ object ContractSerializers {
             "SessionTitleResult" to serializer<SessionTitleResult>(),
             "SessionDeleteParams" to serializer<SessionDeleteParams>(),
             "SessionDeleteResult" to serializer<SessionDeleteResult>(),
+            "SessionCloseParams" to serializer<SessionCloseParams>(),
+            "SessionCloseResult" to serializer<SessionCloseResult>(),
             "SessionInterruptParams" to serializer<SessionInterruptParams>(),
             "SessionInterruptResult" to serializer<SessionInterruptResult>(),
             "SessionEventsSinceParams" to serializer<SessionEventsSinceParams>(),
@@ -415,6 +418,18 @@ data class SessionDeleteParams(
 @Serializable
 data class SessionDeleteResult(
     val deleted: String,
+)
+
+@Serializable
+data class SessionCloseParams(
+    @SerialName("session_id")
+    val sessionId: String,
+    val profile: String? = null,
+)
+
+@Serializable
+data class SessionCloseResult(
+    val closed: Boolean,
 )
 
 @Serializable
