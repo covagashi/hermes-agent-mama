@@ -28,12 +28,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -181,9 +183,17 @@ class ChatViewModel(
     /** Renglones de la `LazyColumn` en orden cronológico (mensajes + pendientes + separadores de día). */
     val items: StateFlow<List<ChatListItem>> =
         combine(
-            repoFlow
-                .filterNotNull()
-                .flatMapLatest { repo -> storedFlow.flatMapLatest { sid -> repo.messages(sid) } },
+            repoFlow.flatMapLatest { repo ->
+                // Sin generación ligada aún (conexión abriendo) el transcript es
+                // vacío — pero los pendientes deben pintarse igual: sin este
+                // fallback el `combine` muere de hambre y la burbuja optimista
+                // no aparece hasta que liga la primera generación.
+                if (repo == null) {
+                    flowOf(emptyList())
+                } else {
+                    storedFlow.flatMapLatest { sid -> repo.messages(sid) }
+                }
+            },
             pendingMessages,
         ) { entities, pending ->
             buildChatItems(
@@ -214,7 +224,9 @@ class ChatViewModel(
         val entry = PendingMessage(key = "pend-${pendingCounter++}", text = text)
         pendingMessages.update { it + entry }
         scope.launch {
-            val generation = generation
+            // La usuaria puede pulsar Enviar mientras la conexión aún abre:
+            // espera acotada a que ligue la generación antes de rendirse.
+            val generation = generation ?: awaitGeneration()
             if (generation == null) {
                 markFailed(entry.key)
                 _notices.tryEmit(ChatNotice.SendFailed)
@@ -230,6 +242,19 @@ class ChatViewModel(
             // El servidor ya persistió la fila `user` al aceptar el submit:
             // refrescar la caché funde la burbuja optimista sin duplicarla.
             refreshHistory(generation)
+        }
+    }
+
+    /** Espera acotada a que `bindGeneration` ligue la primera generación. */
+    private suspend fun awaitGeneration(): ChatGeneration? {
+        if (generation != null) {
+            return generation
+        }
+        // `repoFlow` y `generation` se asignan juntos en bindGeneration —
+        // repoFlow no-null implica generación ligada.
+        return withTimeoutOrNull(GENERATION_WAIT_MS) {
+            repoFlow.filterNotNull().first()
+            generation
         }
     }
 
@@ -418,6 +443,9 @@ class ChatViewModel(
         const val SESSION_STALE_CODE = 4001
         const val STOP_TIMEOUT_MS = 5_000L
         const val NOTICE_BUFFER = 8
+
+        /** Tope de espera a que ligue la generación al enviar (conexión aún abriendo). */
+        const val GENERATION_WAIT_MS = 10_000L
         const val MILLIS_PER_SECOND = 1_000.0
     }
 }
