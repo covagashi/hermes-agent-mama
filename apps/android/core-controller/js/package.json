@@ -4,7 +4,7 @@
   "private": true,
   "description": "Suite Node+jsdom de hermes_snapshot.js contra testing/fixtures/html (F1, ROADMAP §2.6).",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test \"tests/*.test.js\"",
     "update": "node tests/update_expected.js"
   },
   "devDependencies": {
