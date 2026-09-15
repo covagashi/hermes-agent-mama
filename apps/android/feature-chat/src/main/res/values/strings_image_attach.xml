@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de adjuntos de imagen (feature-chat, tarea E1). Español, letra clara,
+     sin tecnicismos: la usuaria es una persona mayor. Fichero separado por área
+     (ROADMAP §4) para no chocar con PRs paralelos (strings_chat.xml de C5…). -->
+<resources>
+    <!-- Errores en lenguaje humano (uno por ImageAttachError, ver ImageAttachMessages.kt) -->
+    <string name="attach_image_error_unreadable">No puedo abrir esa imagen. Prueba con otra foto.</string>
+    <string name="attach_image_error_not_image">Ese archivo no es una foto. Elige una imagen.</string>
+    <string name="attach_image_error_too_large">La foto es demasiado grande. Prueba con otra.</string>
+    <string name="attach_image_error_send_failed">No se ha podido enviar la foto. Inténtalo de nuevo.</string>
+</resources>
