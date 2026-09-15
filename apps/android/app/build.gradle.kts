@@ -156,8 +156,12 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.coroutines.android)
     implementation(libs.timber)
+    // El verifier de C2 (feature-settings) expone OkHttpClient/HttpUrl en su firma.
+    implementation(libs.okhttp)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)

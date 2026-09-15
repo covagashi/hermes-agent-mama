@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- FakeGateway empotrado: loopback cleartext (127.0.0.1) dentro del propio
+         dispositivo — la política §8 lo permite por ser loopback. -->
+    <application android:usesCleartextTraffic="true">
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true" />
+    </application>
+</manifest>

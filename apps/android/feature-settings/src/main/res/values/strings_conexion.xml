@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de la pantalla Conexión (C2, mockup Conexion.dc.html). Español, sin
+     tecnicismos ni códigos HTTP: la usuaria no sabe qué es un "401" (ROADMAP §3). -->
+<resources>
+    <!-- Título y explicación de la pantalla (mockup). -->
+    <string name="conexion_pane_title">Conexión</string>
+    <string name="conexion_title">Conectar con Hermes</string>
+    <string name="conexion_subtitle">Esta pantalla sólo se ve la primera vez. Tu hijo o hija te ayudará a rellenarla.</string>
+
+    <!-- Campos del formulario. La etiqueta también es el contentDescription del campo. -->
+    <string name="conexion_server_label">Dirección del servidor</string>
+    <string name="conexion_username_label">Usuario</string>
+    <string name="conexion_password_label">Contraseña</string>
+    <string name="conexion_password_show">Mostrar contraseña</string>
+    <string name="conexion_password_hide">Ocultar contraseña</string>
+
+    <!-- Preferencia "Leer en voz alta" (la consume D2). -->
+    <string name="conexion_read_aloud">Leer las respuestas en voz alta</string>
+
+    <!-- Botones y estados (mockup). -->
+    <string name="conexion_test_button">Probar conexión</string>
+    <string name="conexion_save_button">Guardar y empezar</string>
+    <string name="conexion_checking">Comprobando la conexión…</string>
+    <string name="conexion_connected">Conectado. Hermes está listo.</string>
+    <string name="conexion_connected_as">Conectado como %1$s.</string>
+
+    <!-- Errores humanos: qué pasó y qué hacer, sin códigos ni jerga. -->
+    <string name="conexion_error_missing_fields">Rellena servidor, usuario y contraseña.</string>
+    <string name="conexion_error_bad_address">Revisa la dirección del servidor: no parece correcta.</string>
+    <string name="conexion_error_insecure">Esa dirección no es segura. Tiene que empezar por «https://».</string>
+    <string name="conexion_error_credentials">Usuario o contraseña incorrectos</string>
+    <string name="conexion_error_unreachable">No encuentro a Hermes. ¿Está encendido el servidor?</string>
+    <string name="conexion_error_rate_limited">Demasiados intentos. Espera un momento y vuelve a probar.</string>
+    <string name="conexion_error_session_expired">Tu sesión caducó. Vuelve a intentarlo.</string>
+    <string name="conexion_error_generic">Algo no ha ido bien. Vuelve a intentarlo.</string>
+
+    <!-- Acceso oculto (flavor mama): acción de TalkBack equivalente a mantener
+         pulsado el logo 3 s en Chats (ver ConnectionUnlock). -->
+    <string name="conexion_unlock_action">Abrir ajustes de conexión</string>
+</resources>

@@ -63,7 +63,7 @@ class BasicAuthSession(
         // §8: una base cleartext sólo vale para loopback/emulador o flavor dev —
         // si no, la contraseña viajaría por internet en claro. Se rechaza aquí,
         // antes de que ningún endpoint pueda usarse.
-        if (baseUrl.scheme == SCHEME_HTTP && !allowCleartext && !isLoopbackOrEmulator(baseUrl.host)) {
+        if (baseUrl.scheme == SCHEME_HTTP && !allowCleartext && !isCleartextAllowedHost(baseUrl.host)) {
             throw AuthException.CleartextForbidden()
         }
     }
@@ -342,31 +342,8 @@ class BasicAuthSession(
         val JSON_MEDIA = MIME_JSON.toMediaType()
         val EMPTY_JSON_BODY = "{}".toRequestBody(JSON_MEDIA)
 
-        /**
-         * §8: cleartext sólo con host loopback/`10.0.2.2` (el flavor `dev`
-         * fuerza `allowCleartext`). El 127/8 exige un IPv4 dotted-quad REAL —
-         * `127.evil.com` también "empieza por 127." y no es loopback.
-         */
-        fun isLoopbackOrEmulator(host: String): Boolean {
-            val quad = LOOPBACK_V4_REGEX.matchEntire(host)
-            return host == HOST_EMULATOR ||
-                host == HOST_LOCALHOST ||
-                host.endsWith(LOCALHOST_SUFFIX) ||
-                (quad != null && quad.groupValues.drop(1).all { it.toInt() <= IPV4_OCTET_MAX }) ||
-                host == HOST_LOOPBACK_V6 ||
-                host == HOST_LOOPBACK_V6_BRACKETED ||
-                host == HOST_LOOPBACK_V6_FULL
-        }
-
-        /** 127.x.y.z con los 4 octetos presentes; el rango (≤255) se valida aparte. */
-        private val LOOPBACK_V4_REGEX = Regex("""^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
-        private const val IPV4_OCTET_MAX = 255
-
-        const val HOST_EMULATOR = "10.0.2.2"
-        const val HOST_LOCALHOST = "localhost"
-        const val LOCALHOST_SUFFIX = ".localhost"
-        const val HOST_LOOPBACK_V6 = "::1"
-        const val HOST_LOOPBACK_V6_BRACKETED = "[::1]"
-        const val HOST_LOOPBACK_V6_FULL = "0:0:0:0:0:0:0:1"
+        // §8: la lista de hosts donde cleartext es admisible (loopback /
+        // `10.0.2.2`) vive en `isCleartextAllowedHost` (CleartextPolicy.kt) —
+        // regla única que también usa la pantalla Conexión de C2.
     }
 }
