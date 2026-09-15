@@ -3,7 +3,9 @@ package ai.hermes.mama.feature.settings
 import ai.hermes.mama.core.ui.theme.MamaTheme
 import ai.hermes.mama.testing.FakeGateway
 import ai.hermes.mama.testing.FakeGatewayScript
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -48,7 +50,6 @@ class ConnectionScreenInstrumentedTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var gateway: FakeGateway? = null
-    private var testCounter = 0
 
     @Volatile
     private var navigatedToChats = false
@@ -71,11 +72,20 @@ class ConnectionScreenInstrumentedTest {
         val gateway = startGateway()
         val settings = freshSettings()
 
-        setScreen(settings)
+        val vm = setScreen(settings)
         fillFields(server = gateway.httpUrl, username = "usuario", password = "mama")
         clickButton("Guardar y empezar")
 
-        composeRule.waitUntil(timeoutMillis = 15_000) { navigatedToChats }
+        try {
+            composeRule.waitUntil(timeoutMillis = 15_000) { navigatedToChats }
+        } catch (e: ComposeTimeoutException) {
+            throw AssertionError(
+                "no navegó: banner=${vm.uiState.value.banner} " +
+                    "checking=${vm.uiState.value.checking} " +
+                    "server='${vm.uiState.value.server}' user='${vm.uiState.value.username}'",
+                e,
+            )
+        }
         val saved = runBlocking { settings.loadCredentials() }
         assertEquals(gateway.httpUrl + "/", saved?.serverBaseUrl)
         assertEquals("usuario", saved?.username)
@@ -147,9 +157,11 @@ class ConnectionScreenInstrumentedTest {
 
     /** Settings reales de la app (SecureStore cifrado + DataStore) en ficheros únicos por test. */
     private fun freshSettings(): DataStoreConnectionSettings {
-        // El contador se captura eager: el produceFile del DataStore se evalúa
-        // perezosamente y con $testCounter en el lambda dos stores resolverían
-        // el mismo fichero ("multiple DataStores active").
+        // El contador se captura eager (el produceFile del DataStore se evalúa
+        // perezosamente) y vive en companion: JUnit4 instancia la clase por
+        // test, así que un contador de instancia reiniciaría los nombres y el
+        // store del test anterior sigue activo en `scope` ("multiple
+        // DataStores active for the same file").
         val n = ++testCounter
         val store =
             PreferenceDataStoreFactory.create(scope = scope) {
@@ -162,11 +174,12 @@ class ConnectionScreenInstrumentedTest {
         )
     }
 
-    private fun setScreen(settings: ConnectionSettings) {
+    private fun setScreen(settings: ConnectionSettings): ConnectionViewModel {
         val vm =
             ConnectionViewModel(
                 settings = settings,
-                verifier = BasicAuthConnectionVerifier(),
+                verifier = BasicAuthConnectionVerifier(logger = { Log.w(TAG, it) }),
+                logger = { Log.w(TAG, it) },
             )
         composeRule.setContent {
             MamaTheme {
@@ -176,6 +189,7 @@ class ConnectionScreenInstrumentedTest {
                 )
             }
         }
+        return vm
     }
 
     private fun fillFields(
@@ -207,5 +221,10 @@ class ConnectionScreenInstrumentedTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
+    }
+
+    private companion object {
+        const val TAG = "C2ConnTest"
+        var testCounter = 0
     }
 }
