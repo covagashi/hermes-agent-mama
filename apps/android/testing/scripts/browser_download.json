@@ -1,0 +1,34 @@
+{
+  "name": "browser_download",
+  "description": "Guion G1 'descargar factura' (§5/G1): tool.start browser_* → auto-registro + NavigateToBrowser, navigate a la fixture descargas.html (MockWebServer), snapshot (reparte los refs) y click a @e1 — el único enlace, que apunta a /factura-mama.pdf servido con Content-Disposition: attachment. El WebView lo entrega al DownloadListener; el test espera el fichero en Downloads/Hermes/ y la hoja inferior. El click va con await:true (resultado asertable); la navegación a una respuesta attachment no cierra con PageFinished y el comando queda en curso unos segundos — ventana en la que la nota «Downloaded file saved…» viaja en su browser.controller.result. ATENCIÓN: las URLs llevan el token {{WEB}} — el test lo sustituye por la base del MockWebServer antes de FakeGatewayScript.parse.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-browser-g1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "baja la factura" },
+      "steps": [
+        { "event": "message.start" },
+        { "event": "tool.start", "payload": { "tool_id": "tool-dl-1", "name": "browser_navigate", "context": "abriendo la página de descargas…" } },
+        { "event": "browser.progress", "payload": { "message": "Abro la página de descargas", "level": "info" } },
+        { "browser_command": { "action": "browser_navigate", "arguments": { "url": "{{WEB}}/descargas.html" } } },
+        { "browser_command": { "action": "browser_snapshot", "arguments": { "full": false } } },
+        { "event": "browser.progress", "payload": { "message": "Pulso «Descargar factura»", "level": "info" } },
+        { "browser_command": { "action": "browser_click", "arguments": { "ref": "@e1" } } },
+        { "event": "tool.complete", "payload": { "tool_id": "tool-dl-1", "name": "browser_navigate", "summary": "descarga lanzada" } },
+        { "delta": "Ya la tienes: guardé la factura en Descargas." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ],
+  "default_turn": {
+    "steps": [
+      { "event": "message.start" },
+      { "delta": "Anotado." },
+      { "event": "message.complete", "payload": { "status": "complete" } }
+    ]
+  }
+}

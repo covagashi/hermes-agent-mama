@@ -69,6 +69,7 @@ contra el guion activo, con `ConnectionManager` + Room reales. En el flavor
 | `browser_off` | `browser.enabled=false`: todo `browser.controller.*` → 4403 (flag apagado) |
 | `browser_cancel` | `browser_command` sin esperar + `browser.controller.cancel` del servidor |
 | `browser_find_invoice` | F4: `tool.start` → registro del controlador → navigate+snapshot+click |
+| `browser_download` | G1: navigate a `descargas.html` + click al enlace PDF (`{{WEB}}` → MockWebServer; el attachment va al `DownloadListener`) |
 | `error` | `message.complete` con error; un prompt `boom` además recibe error JSON-RPC |
 | `lento` | Turno largo con pausas: para Parar (`session.interrupt`) y `close_socket` |
 | `rate_limited` | Todo login → 429 con `Retry-After` (pantalla de rate limit) |

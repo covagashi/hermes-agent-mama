@@ -5,7 +5,12 @@ import ai.hermes.mama.core.ui.components.MamaButtonVariant
 import ai.hermes.mama.core.ui.components.TopBanner
 import ai.hermes.mama.core.ui.theme.MamaDimens
 import ai.hermes.mama.core.ui.theme.MamaTheme
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -35,9 +40,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -47,6 +56,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
@@ -76,6 +86,32 @@ fun BrowserPane(
 ) {
     val state by controller.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(controller, autoOpened) { controller.start(autoOpenNotice = autoOpened) }
+    // §5/G1: el DownloadListener del WebView delega en el gestor de la sesión.
+    // No se limpia en onDispose: driver y descargas en curso sobreviven a la
+    // pantalla («Volver al chat» no cancela una descarga).
+    LaunchedEffect(driver, controller.downloads) {
+        controller.downloads?.let { driver.downloadHandler = it::onDownloadStart }
+    }
+    // §5/G1: la notificación «Descarga terminada» necesita POST_NOTIFICATIONS en
+    // API 33+ (runtime). Se pide una vez, justo cuando la hoja de la primera
+    // descarga la hace relevante; concederla o no no cambia nada más.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val context = LocalContext.current
+        var askedNotify by rememberSaveable { mutableStateOf(false) }
+        val notifyPermission =
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        LaunchedEffect(state.download != null) {
+            if (
+                !askedNotify &&
+                state.download != null &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                askedNotify = true
+                notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
     DisposableEffect(controller) {
         onDispose {
             // Sólo los colectores: el controlador sigue registrado (§5/F4).
@@ -87,6 +123,10 @@ fun BrowserPane(
         onStop = controller::stopHermes,
         onBackToChat = onBackToChat,
         modifier = modifier,
+        onDownloadOpen = controller::openDownload,
+        onDownloadShare = controller::shareDownload,
+        onDownloadSendToHermes = controller::sendDownloadToHermes,
+        onDownloadDismiss = controller::dismissDownload,
     ) {
         BrowserWebView(driver = driver, modifier = Modifier.fillMaxSize())
     }
@@ -106,35 +146,52 @@ fun BrowserScreen(
     onStop: () -> Unit,
     onBackToChat: () -> Unit,
     modifier: Modifier = Modifier,
+    onDownloadOpen: () -> Unit = {},
+    onDownloadShare: () -> Unit = {},
+    onDownloadSendToHermes: () -> Unit = {},
+    onDownloadDismiss: () -> Unit = {},
     webContent: @Composable () -> Unit,
 ) {
     val title = stringResource(R.string.browser_screen_title)
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .semantics { paneTitle = title },
-    ) {
-        if (state.showAutoOpenNotice) {
-            TopBanner(
-                text = stringResource(R.string.browser_auto_open_notice),
-                icon = Icons.Outlined.Public,
-            )
-        }
-        BrowserTopBar(state = state, onStop = onStop)
-        // El velo cubre SÓLO el área web: la barra superior (Parar) y la
-        // inferior (Volver al chat) siguen alcanzables con un comando en curso.
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            webContent()
-            if (state.commandInFlight) {
-                BrowserVeil(
-                    detail = state.progressMessage,
-                    modifier = Modifier.fillMaxSize(),
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .semantics { paneTitle = title },
+        ) {
+            if (state.showAutoOpenNotice) {
+                TopBanner(
+                    text = stringResource(R.string.browser_auto_open_notice),
+                    icon = Icons.Outlined.Public,
                 )
             }
+            BrowserTopBar(state = state, onStop = onStop)
+            // El velo cubre SÓLO el área web: la barra superior (Parar) y la
+            // inferior (Volver al chat) siguen alcanzables con un comando en curso.
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                webContent()
+                if (state.commandInFlight) {
+                    BrowserVeil(
+                        detail = state.progressMessage,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            BrowserBottomBar(onBackToChat = onBackToChat)
         }
-        BrowserBottomBar(onBackToChat = onBackToChat)
+        // §5/G1: hoja «📄 nombre — Abrir · Compartir · Enviar a Hermes» al
+        // terminar una descarga — por encima de todo, también del velo.
+        state.download?.let { doc ->
+            DownloadSheetOverlay(
+                doc = doc,
+                onOpen = onDownloadOpen,
+                onShare = onDownloadShare,
+                onSendToHermes = onDownloadSendToHermes,
+                onDismiss = onDownloadDismiss,
+            )
+        }
     }
 }
 

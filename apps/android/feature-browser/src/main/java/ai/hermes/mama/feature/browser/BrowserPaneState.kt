@@ -25,6 +25,11 @@ data class BrowserPaneState(
      * controlador lo apaga solo pasado unos segundos.
      */
     val showAutoOpenNotice: Boolean = false,
+    /**
+     * Última descarga terminada sin descartar (§5/G1) → la hoja inferior
+     * «📄 nombre — Abrir · Compartir · Enviar a Hermes». `null` = hoja cerrada.
+     */
+    val download: DownloadedDoc? = null,
 )
 
 /** Fases de la pantalla (traducción UI de [ControllerState]). */
