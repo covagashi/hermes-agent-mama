@@ -5,14 +5,17 @@ import ai.hermes.mama.testing.FakeGateway
 import ai.hermes.mama.testing.FakeGatewayScript
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.printToLog
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -189,6 +192,8 @@ class ConnectionScreenInstrumentedTest {
                 )
             }
         }
+        // Diagnóstico CI: árbol de semántica completo tras la primera composición.
+        composeRule.onRoot().printToLog(TAG)
         return vm
     }
 
@@ -209,6 +214,17 @@ class ConnectionScreenInstrumentedTest {
     }
 
     private fun clickButton(text: String) {
+        // Diagnóstico CI: si el click no dispara onClick, el log muestra cuántos
+        // nodos casan con el texto, si llevan la acción OnClick y su bounds.
+        val matches = composeRule.onAllNodesWithText(text).fetchSemanticsNodes()
+        Log.w(
+            TAG,
+            "clickButton('$text'): ${matches.size} match(es): " +
+                matches.joinToString { n ->
+                    "id=${n.id} click=${SemanticsActions.OnClick in n.config} " +
+                        "bounds=${n.boundsInRoot}"
+                },
+        )
         composeRule.onNodeWithText(text).performClick()
         composeRule.waitForIdle()
     }
