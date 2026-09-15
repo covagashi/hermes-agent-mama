@@ -27,10 +27,13 @@ tasks.withType<JavaCompile>().configureEach {
 
 dependencies {
     implementation(project(":core-contract"))
+    implementation(project(":core-gateway"))
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coroutines.core)
 
+    testImplementation(project(":testing"))
+    testImplementation(libs.okhttp)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.turbine)
