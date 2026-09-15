@@ -30,11 +30,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import timber.log.Timber
 
@@ -51,10 +57,15 @@ import timber.log.Timber
  */
 class DevChatHost(
     context: Context,
-    private val scope: CoroutineScope,
     private val endpoint: String,
     private val logger: (String) -> Unit = {},
 ) {
+    /**
+     * Scope propio (no `lifecycleScope`): `stop()` corre sobre él desde
+     * `onDestroy`, cuando el scope de la activity ya está cancelado.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private val db = MamaDatabase.create(context)
     private val http = OkHttpClient()
 
@@ -90,17 +101,20 @@ class DevChatHost(
                     )
                 lastRepository = repository
                 ChatGeneration(repository = repository, client = client)
-            }
+            }.shareIn(scope, SharingStarted.Eagerly, replay = 1)
 
     /** Arranca el bucle (idempotente). */
     fun start() {
         manager.connect()
     }
 
-    /** Cierre ordenado (onDestroy del host). */
-    suspend fun stop() {
-        lastRepository?.close()
-        manager.disconnect()
+    /** Cierre ordenado (onDestroy del host): corre en [scope] y lo cancela al acabar. */
+    fun stop() {
+        scope
+            .launch {
+                lastRepository?.close()
+                manager.disconnect()
+            }.invokeOnCompletion { scope.cancel() }
     }
 }
 

@@ -81,7 +81,6 @@ class MainActivity : ComponentActivity() {
             devHost =
                 DevChatHost(
                     context = applicationContext,
-                    scope = lifecycleScope,
                     endpoint = endpoint,
                     logger = Timber::w,
                 ).also { it.start() }
@@ -123,7 +122,9 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         val host = devHost ?: return
         devHost = null
-        lifecycleScope.launch { host.stop() }
+        // No en lifecycleScope: super.onDestroy() ya lo ha cancelado y el
+        // launch sería no-op — el host limpia sobre su scope propio.
+        host.stop()
     }
 
     // Si en el futuro la activity pasa a singleTask/singleTop, el arranque

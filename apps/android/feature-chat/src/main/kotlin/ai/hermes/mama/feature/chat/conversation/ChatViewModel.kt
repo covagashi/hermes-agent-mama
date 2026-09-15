@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Una generación de conexión viva con el backend (un socket == una generación,
@@ -94,8 +95,12 @@ class ChatViewModel(
     private var mainJob: Job? = null
     private var runtimeTrackerJob: Job? = null
 
-    /** Último `seq` visto en vivo o por replay — `last_seen` de `session.events.since`. */
-    private var lastSeenSeq = 0L
+    /**
+     * Último `seq` visto en vivo o por replay — `last_seen` de `session.events.since`.
+     * Lo escribe `collectEvents` y lo lee `resync` (corrutinas hermanas del mismo
+     * scope — en tests `Dispatchers.Default`, no hay hilo único garantizado).
+     */
+    private val lastSeenSeq = AtomicLong(0)
 
     /** Runtime id de la generación vigente (`null` hasta el primer `open`). */
     @Volatile
@@ -138,7 +143,7 @@ class ChatViewModel(
     val offline: StateFlow<Boolean> =
         connectionState
             .map { state -> state !is ConnectionState.Connected }
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.WhileSubscribed(), false)
 
     /** Turno del asistente en vuelo (texto acumulado de deltas; `null` = sin streaming). */
     val liveTurn: StateFlow<LiveTurn?> =
@@ -262,7 +267,7 @@ class ChatViewModel(
         generationJob?.cancel()
         this.generation = generation
         runtimeId = null
-        preOpenEvents.clear()
+        synchronized(preOpenEvents) { preOpenEvents.clear() }
         repoFlow.value = generation.repository
         sink.reset()
         generationJob = scope.launch { runGeneration(generation) }
@@ -282,7 +287,7 @@ class ChatViewModel(
                 // Reconexión (ya habíamos visto eventos): rellena el hueco por
                 // replay y refresca el transcript — §C4 "Reconnected → history()
                 // + session.events.since(último seq)".
-                if (lastSeenSeq > 0) {
+                if (lastSeenSeq.get() > 0) {
                     resync(generation, opened.runtimeId)
                 }
             } catch (e: CancellationException) {
@@ -290,14 +295,21 @@ class ChatViewModel(
             } catch (e: Exception) {
                 warn("apertura del chat falló (${e::class.simpleName})")
                 _notices.tryEmit(ChatNotice.GatewayError)
+                // Sin runtimeId nada se drena: sin este vaciado los eventos se
+                // acumularían en preOpenEvents hasta la próxima generación.
+                synchronized(preOpenEvents) { preOpenEvents.clear() }
             }
         }
     }
 
     /** Re-evalúa los eventos retenidos: los de este runtime ya se pueden aplicar. */
     private fun drainPreOpen(runtimeId: String) {
-        val ours = preOpenEvents.filter { it.sessionId == runtimeId }
-        preOpenEvents.clear()
+        val ours =
+            synchronized(preOpenEvents) {
+                val matching = preOpenEvents.filter { it.sessionId == runtimeId }
+                preOpenEvents.clear()
+                matching
+            }
         ours.forEach { onSessionEvent(it) }
     }
 
@@ -307,7 +319,7 @@ class ChatViewModel(
             when {
                 // Broadcast (session_id ""): no es de este chat — el reducer ya lo atiende.
                 event.sessionId == null -> trackSeq(event)
-                rid == null -> preOpenEvents.addLast(event)
+                rid == null -> synchronized(preOpenEvents) { preOpenEvents.addLast(event) }
                 event.sessionId == rid -> onSessionEvent(event)
                 else -> Unit // evento de OTRA sesión del mismo socket
             }
@@ -322,9 +334,7 @@ class ChatViewModel(
 
     private fun trackSeq(event: GatewayEvent) {
         val seq = event.seq ?: return
-        if (seq > lastSeenSeq) {
-            lastSeenSeq = seq
-        }
+        lastSeenSeq.accumulateAndGet(seq) { seen, next -> maxOf(seen, next) }
     }
 
     // --- resync tras reconexión ---
@@ -334,7 +344,7 @@ class ChatViewModel(
         runtimeId: String,
     ) {
         val since =
-            runCatching { generation.client.sessionEventsSince(runtimeId, lastSeenSeq) }
+            runCatching { generation.client.sessionEventsSince(runtimeId, lastSeenSeq.get()) }
                 .getOrElse {
                     warn("session.events.since falló (${it::class.simpleName})")
                     null
@@ -344,14 +354,14 @@ class ChatViewModel(
                 since.events
                     .mapNotNull { it.toGatewayEvent() }
                     .sortedBy { it.seq ?: Long.MAX_VALUE }
-                    .filter { event -> event.seq.let { seq -> seq == null || seq > lastSeenSeq } }
+                    .filter { event -> event.seq.let { seq -> seq == null || seq > lastSeenSeq.get() } }
             val applied = mutableListOf<GatewayEvent>()
             for (event in fresh) {
                 val seq = event.seq
                 // Re-chequeo por seq: un evento pudo llegar EN VIVO entre el
                 // filtro de arriba y este bucle — re-aplicarlo duplicaría el
                 // delta en la burbuja viva.
-                if (seq != null && seq <= lastSeenSeq) {
+                if (seq != null && seq <= lastSeenSeq.get()) {
                     continue
                 }
                 trackSeq(event)

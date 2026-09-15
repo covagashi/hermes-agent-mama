@@ -147,7 +147,10 @@ internal fun mergePending(
     pending: List<PendingMessage>,
 ): List<ChatMessage> {
     val consumable = room.filter { it.author == ChatBubbleAuthor.User }.map { it.text }.toMutableList()
-    val stillPending = pending.filter { !consumable.remove(it.text) }
+    // Un pendiente fallido JAMÁS lo consume una fila del transcript: su texto
+    // pudo no llegar al servidor y una fila antigua igual se lo comería sin
+    // dejar ni burbuja ni «toca para reintentar».
+    val stillPending = pending.filter { it.failed || !consumable.remove(it.text) }
     return room +
         stillPending.map { p ->
             ChatMessage(
