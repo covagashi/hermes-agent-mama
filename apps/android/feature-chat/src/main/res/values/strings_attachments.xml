@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings de los adjuntos de archivo (data/attachments, tarea E2). Español,
+     lenguaje para una persona mayor: frases cortas, sin códigos ni tecnicismos
+     ("gateway" → "Hermes", ROADMAP §3). Fichero aparte para no chocar con PRs
+     paralelos (§4: un fichero de strings por pantalla/área). -->
+<resources>
+    <!-- Errores en lenguaje humano (uno por FileAttachError, ver AttachMessages.kt) -->
+    <string name="attach_error_unreadable">No puedo abrir este archivo. Prueba a elegirlo otra vez.</string>
+    <string name="attach_error_empty">Este archivo está vacío, no tiene nada dentro.</string>
+    <string name="attach_error_too_large">El archivo es demasiado grande. Como máximo puede pesar 8 MB.</string>
+    <string name="attach_error_not_attached">Hermes no ha aceptado el archivo. Inténtalo otra vez.</string>
+    <string name="attach_error_send_failed">No se pudo enviar el archivo. Revisa la conexión e inténtalo otra vez.</string>
+</resources>
