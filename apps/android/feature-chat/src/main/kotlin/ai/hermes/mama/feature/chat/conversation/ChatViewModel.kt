@@ -345,11 +345,20 @@ class ChatViewModel(
                     .mapNotNull { it.toGatewayEvent() }
                     .sortedBy { it.seq ?: Long.MAX_VALUE }
                     .filter { event -> event.seq.let { seq -> seq == null || seq > lastSeenSeq } }
+            val applied = mutableListOf<GatewayEvent>()
             for (event in fresh) {
+                val seq = event.seq
+                // Re-chequeo por seq: un evento pudo llegar EN VIVO entre el
+                // filtro de arriba y este bucle — re-aplicarlo duplicaría el
+                // delta en la burbuja viva.
+                if (seq != null && seq <= lastSeenSeq) {
+                    continue
+                }
                 trackSeq(event)
                 onSessionEvent(event)
+                applied += event
             }
-            generation.repository.replayEvents(fresh)
+            generation.repository.replayEvents(applied)
         }
         refreshHistory(generation)
     }

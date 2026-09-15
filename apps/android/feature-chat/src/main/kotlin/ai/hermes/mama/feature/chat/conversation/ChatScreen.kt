@@ -266,7 +266,9 @@ private fun MessageRow(
             horizontalAlignment = Alignment.End,
         ) {
             ChatBubble(
-                text = markdownToAnnotated(message.text, styles),
+                // El parse de markdown se memoiza: las filas del transcript se
+                // recomponen con la lista y el texto no cambia.
+                text = remember(message.text, styles) { markdownToAnnotated(message.text, styles) },
                 author = message.author,
             )
             Text(
@@ -278,7 +280,7 @@ private fun MessageRow(
         }
     } else {
         ChatBubble(
-            text = markdownToAnnotated(message.text, styles),
+            text = remember(message.text, styles) { markdownToAnnotated(message.text, styles) },
             author = message.author,
             isError = message.isError,
             modifier = Modifier.alpha(if (message.pending) PENDING_ALPHA else 1f),
