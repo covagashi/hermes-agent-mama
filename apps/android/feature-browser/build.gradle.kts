@@ -69,6 +69,9 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    // F2: fixtures HTML servidas por MockWebServer + JSON para leer resultados §2.6.
+    androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.kotlinx.serialization.json)
 }
 
 tasks.withType<Test>().configureEach {

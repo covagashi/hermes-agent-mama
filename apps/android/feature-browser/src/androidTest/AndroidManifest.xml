@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application>
+    <!-- usesCleartextTraffic: MockWebServer sirve http://localhost en los tests (F2). -->
+    <application android:usesCleartextTraffic="true">
         <!-- Activity mínima que hospeda el WebView bajo test (F1). -->
         <activity
             android:name="ai.hermes.mama.feature.browser.SnapshotTestActivity"
+            android:exported="false" />
+        <!-- Activity que hospeda el WebViewDriver del controlador (F2). -->
+        <activity
+            android:name="ai.hermes.mama.feature.browser.ControllerTestActivity"
             android:exported="false" />
     </application>
 </manifest>
