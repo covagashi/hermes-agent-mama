@@ -51,6 +51,11 @@ puedes escribir a Hermes.
 Repite los pasos 1 a 4: la versión nueva se instala **encima** de la anterior
 y conserva tus chats y la conexión.
 
+> Nota para quien publica: esto es cierto con la firma release real. Si un
+> release salió firmado con la clave de debug (sin secretos en CI), cada
+> build lleva una clave distinta y Android pedirá desinstalar antes —
+> los chats se pierden.
+
 ## Si algo falla
 
 - **«Aplicación no instalada»** → avisa a quien te la instaló.

@@ -177,5 +177,9 @@ es apto para Play. El keystore se genera una vez, fuera del repo:
 
 ```bash
 keytool -genkeypair -v -keystore /tmp/mama-release.jks -alias mama \
-  -keyalg RSA -keysize 4096 -validity 10000
+  -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Hermes Mama"
 ```
+
+El `-dname` fijo evita el prompt interactivo (nombre real, organización…):
+el CN del certificado sale en los logs públicos de CI
+(`apksigner verify --print-certs`).
