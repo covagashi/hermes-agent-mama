@@ -133,9 +133,13 @@ class ConnectionViewModel(
 
     fun onPasswordChange(value: String) = updateForm { it.copy(password = value) }
 
-    fun onTogglePasswordVisibility() = updateForm { it.copy(passwordVisible = !it.passwordVisible) }
+    fun onTogglePasswordVisibility() {
+        log("toggle password")
+        updateForm { it.copy(passwordVisible = !it.passwordVisible) }
+    }
 
     fun onReadAloudChange(enabled: Boolean) {
+        log("readaloud -> $enabled")
         _uiState.update { it.copy(readAloud = enabled) }
         viewModelScope.launch { settings.setReadAloud(enabled) }
     }
@@ -151,8 +155,15 @@ class ConnectionViewModel(
         _uiState.update(edit)
     }
 
+    private fun log(message: String) = runCatching { logger(message) }
+
     private fun check(saveAndStart: Boolean) {
         val state = _uiState.value
+        log(
+            "check(save=$saveAndStart) checking=${state.checking} " +
+                "fields serverBlank=${state.server.isBlank()} " +
+                "userBlank=${state.username.isBlank()} passEmpty=${state.password.isEmpty()}",
+        )
         if (state.checking) return
         val serverUrl = normalizeServerUrl(state.server)
         val reason =
@@ -163,15 +174,18 @@ class ConnectionViewModel(
                 else -> null
             }
         if (reason != null || serverUrl == null) {
+            log("check rejected: ${reason ?: ConnectionErrorReason.BadAddress}")
             _uiState.update { it.copy(banner = ConnectionBanner.Failed(reason ?: ConnectionErrorReason.BadAddress)) }
             return
         }
         checkJob?.cancel()
         checkJob =
             viewModelScope.launch {
+                log("checkJob running")
                 _uiState.update { it.copy(checking = true, banner = null) }
                 try {
                     val identity = verifier.verify(serverUrl, state.username.trim(), state.password)
+                    log("verify ok")
                     if (saveAndStart) {
                         // §8: sólo se guardan credenciales YA validadas por `me`.
                         settings.saveCredentials(
@@ -181,8 +195,10 @@ class ConnectionViewModel(
                                 password = state.password,
                             ),
                         )
+                        log("credentials saved")
                         _uiState.update { it.copy(checking = false) }
                         _navigation.emit(ConnectionNavEvent.NavigateToChats)
+                        log("nav emitted")
                     } else {
                         _uiState.update {
                             it.copy(checking = false, banner = ConnectionBanner.Connected(identity.displayName))
