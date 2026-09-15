@@ -14,4 +14,9 @@
     <!-- Las versiones se fijan deliberadamente en gradle/libs.versions.toml. -->
     <issue id="GradleDependency" severity="ignore" />
     <issue id="AndroidGradlePluginVersion" severity="ignore" />
+
+    <!-- La app es 100% español (ROADMAP §0/§3): el check Typos usa diccionario
+         inglés y marca como erratas palabras legítimas ("momento"→"memento").
+         Falso positivo por diseño en este proyecto. -->
+    <issue id="Typos" severity="ignore" />
 </lint>
