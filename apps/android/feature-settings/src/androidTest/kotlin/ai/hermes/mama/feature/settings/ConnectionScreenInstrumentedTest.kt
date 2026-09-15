@@ -147,13 +147,16 @@ class ConnectionScreenInstrumentedTest {
 
     /** Settings reales de la app (SecureStore cifrado + DataStore) en ficheros únicos por test. */
     private fun freshSettings(): DataStoreConnectionSettings {
-        testCounter++
+        // El contador se captura eager: el produceFile del DataStore se evalúa
+        // perezosamente y con $testCounter en el lambda dos stores resolverían
+        // el mismo fichero ("multiple DataStores active").
+        val n = ++testCounter
         val store =
             PreferenceDataStoreFactory.create(scope = scope) {
-                File(context.cacheDir, "c2_test_$testCounter.preferences_pb")
+                File(context.cacheDir, "c2_test_$n.preferences_pb")
             }
         return DataStoreConnectionSettings(
-            secureStore = EncryptedPrefsSecureStore(context, fileName = "c2_test_$testCounter.secure"),
+            secureStore = EncryptedPrefsSecureStore(context, fileName = "c2_test_$n.secure"),
             dataStore = store,
             scope = scope,
         )
