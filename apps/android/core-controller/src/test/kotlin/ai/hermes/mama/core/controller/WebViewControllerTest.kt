@@ -2,8 +2,12 @@
 
 package ai.hermes.mama.core.controller
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -12,6 +16,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -157,6 +162,26 @@ class WebViewControllerTest {
             assertEquals("Fake Page", json["title"]?.jsonPrimitive?.contentOrNull)
             assertEquals("- heading \"Mis pedidos\" [ref=e1]", json["snapshot"]?.jsonPrimitive?.contentOrNull)
             assertEquals(1, json["element_count"]?.jsonPrimitive?.intOrNull)
+        }
+
+    @Test
+    fun `navigate con PageError del frame principal devuelve ok false con motivo`() =
+        runTest {
+            val (controller, fake) = newController()
+            val deferred =
+                async {
+                    controller.execute(
+                        BrowserCommand.Navigate("c1", "https://hermes.example.invalid/caigo"),
+                    )
+                }
+            testScheduler.runCurrent()
+            fake.emitPageStarted()
+            fake.emitPageError(description = "net::ERR_CONNECTION_REFUSED")
+            testScheduler.advanceUntilIdle()
+            val outcome = deferred.await()
+            assertFalse(outcome.ok)
+            assertTrue(outcome.resultJson.contains("Navigation failed"), outcome.resultJson)
+            assertTrue(outcome.resultJson.contains("ERR_CONNECTION_REFUSED"), outcome.resultJson)
         }
 
     @Test
@@ -392,6 +417,51 @@ class WebViewControllerTest {
             testScheduler.advanceUntilIdle()
         }
 
+    @Test
+    fun `execute con scope ya cancelado devuelve fallo en vez de colgar`() =
+        runTest {
+            val fake = FakeWebView()
+            // Scope muerto: el job LAZY nunca corre su cuerpo — invokeOnCompletion
+            // debe producir el resultado §2.6 igualmente.
+            val deadScope = CoroutineScope(coroutineContext + Job()).also { it.cancel() }
+            val ctrl =
+                WebViewController(
+                    fake,
+                    deadScope,
+                    nowMs = { testScheduler.currentTime },
+                    scriptSource = { "/* stub */" },
+                )
+            val outcome = ctrl.execute(BrowserCommand.Noop("c1"))
+            assertFalse(outcome.ok)
+            assertTrue(outcome.resultJson.contains("cancelled"), outcome.resultJson)
+        }
+
+    // ------------------------------------------------------ serialización ---
+
+    @Test
+    fun `comandos concurrentes se serializan en el driver`() =
+        runTest {
+            val (controller, fake) = newController()
+            val active = AtomicInteger(0)
+            val maxSeen = AtomicInteger(0)
+            fake.responder = { script ->
+                if (script.startsWith("window.__hermes.")) {
+                    maxSeen.set(maxOf(maxSeen.get(), active.incrementAndGet()))
+                    delay(50) // sin execMutex, el otro comando entraría aquí
+                    active.decrementAndGet()
+                    FakeWebView.jsResult("""{"success":true}""")
+                } else {
+                    "null"
+                }
+            }
+            val a = async { controller.execute(BrowserCommand.Click("c1", "@e1")) }
+            val b = async { controller.execute(BrowserCommand.Press("c2", "Enter")) }
+            testScheduler.advanceUntilIdle()
+            assertTrue(a.await().ok)
+            assertTrue(b.await().ok)
+            assertEquals(1, maxSeen.get(), "el driver nunca debe ejecutar dos comandos a la vez")
+        }
+
     // ------------------------------------------------------ post-action nav --
 
     @Test
@@ -407,6 +477,32 @@ class WebViewControllerTest {
             testScheduler.advanceUntilIdle()
             val outcome = deferred.await()
             assertTrue(outcome.ok)
+        }
+
+    @Test
+    fun `navegacion empezada DURANTE el eval de la accion tambien se espera`() =
+        runTest {
+            val (controller, fake) = newController()
+            fake.responder =
+                responder { script ->
+                    if (script.contains("click(")) {
+                        // El click abre la página DURANTE el eval: la marca de
+                        // eventos debe haberse tomado antes, o se filtraría.
+                        fake.emitPageStarted("https://hermes.example.invalid/en-eval")
+                        FakeWebView.jsResult("""{"success":true,"clicked":"@e2"}""")
+                    } else {
+                        null
+                    }
+                }
+            val deferred = async { controller.execute(BrowserCommand.Click("c1", "@e2")) }
+            testScheduler.runCurrent()
+            // 300 ms de settle + peek ya consumidos: la carga debe seguir esperándose.
+            testScheduler.advanceTimeBy(900)
+            testScheduler.runCurrent()
+            assertFalse(deferred.isCompleted, "la navegación iniciada en el eval debe esperarse")
+            fake.emitPageFinished("https://hermes.example.invalid/en-eval")
+            testScheduler.advanceUntilIdle()
+            assertTrue(deferred.await().ok)
         }
 
     @Test
@@ -440,7 +536,7 @@ class WebViewControllerTest {
      * Responder que deja pasar la inyección (`"null"`) y delega las llamadas
      * `window.__hermes.*` al bloque dado (null → éxito por defecto).
      */
-    private fun responder(map: (String) -> String?): (String) -> String =
+    private fun responder(map: (String) -> String?): suspend (String) -> String =
         { script ->
             if (script.startsWith("window.__hermes.")) {
                 map(script) ?: FakeWebView.jsResult("""{"success":true}""")

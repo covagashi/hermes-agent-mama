@@ -2,6 +2,8 @@ package ai.hermes.mama.core.controller
 
 import ai.hermes.mama.contract.BrowserControllerCommandPayload
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
@@ -29,6 +31,51 @@ class BrowserCommandTest {
         assertTrue((cmd as BrowserCommand.Invalid).reason.contains("url"))
         val blank = from("browser_navigate", args("url" to "   "))
         assertIs<BrowserCommand.Invalid>(blank)
+    }
+
+    @Test
+    fun `navigate rechaza esquemas que no son http o https`() {
+        // §8: la app es la única frontera — javascript:/data:/file:/content:
+        // nunca deben llegar al WebView.
+        val blocked =
+            listOf(
+                "javascript:alert(1)",
+                "data:text/html,<h1>phish</h1>",
+                "file:///android_asset/orders.html",
+                "file:///sdcard/descargas/x.html",
+                "content://media/external/x",
+                "ftp://hermes.example.invalid/x",
+            )
+        for (url in blocked) {
+            val cmd = from("browser_navigate", args("url" to url))
+            assertIs<BrowserCommand.Invalid>(cmd, "$url debe producir Invalid")
+            assertTrue(
+                (cmd as BrowserCommand.Invalid).reason.contains("http(s)"),
+                "$url → motivo inesperado: ${cmd.reason}",
+            )
+        }
+    }
+
+    @Test
+    fun `navigate acepta https en mayusculas y about blank y trimea la url`() {
+        val https = from("browser_navigate", args("url" to "HTTPS://hermes.example.invalid/"))
+        assertIs<BrowserCommand.Navigate>(https)
+        assertIs<BrowserCommand.Navigate>(from("browser_navigate", args("url" to "about:blank")))
+        val padded = from("browser_navigate", args("url" to "  https://hermes.example.invalid/  "))
+        assertIs<BrowserCommand.Navigate>(padded)
+        assertEquals("https://hermes.example.invalid/", (padded as BrowserCommand.Navigate).url)
+    }
+
+    @Test
+    fun `argumentos no primitivos producen Invalid en vez de lanzar`() {
+        // `arguments` llega suelto del wire: un objeto/array donde se esperaba
+        // string no debe tirar — from() nunca lanza (el broker espera resultado).
+        val refObj = buildJsonObject { put("ref", buildJsonObject { put("a", 1) }) }
+        assertIs<BrowserCommand.Invalid>(from("browser_click", refObj))
+        val refArr = buildJsonObject { put("ref", buildJsonArray { add(1) }) }
+        assertIs<BrowserCommand.Invalid>(from("browser_click", refArr))
+        val urlObj = buildJsonObject { put("url", buildJsonObject { put("a", 1) }) }
+        assertIs<BrowserCommand.Invalid>(from("browser_navigate", urlObj))
     }
 
     @Test

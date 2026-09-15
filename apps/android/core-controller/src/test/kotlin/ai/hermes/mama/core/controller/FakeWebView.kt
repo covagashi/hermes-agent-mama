@@ -25,7 +25,7 @@ class FakeWebView : WebViewDriver {
      * de inyección responde `"null"` y las llamadas `window.__hermes.*`
      * responden `{"success":true}` — los tests lo especializan por substring.
      */
-    var responder: (String) -> String = { script ->
+    var responder: suspend (String) -> String = { script ->
         if (script.startsWith("window.__hermes.")) {
             jsResult("""{"success":true}""")
         } else {

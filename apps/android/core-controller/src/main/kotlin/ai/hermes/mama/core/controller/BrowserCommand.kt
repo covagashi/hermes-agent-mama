@@ -2,9 +2,9 @@ package ai.hermes.mama.core.controller
 
 import ai.hermes.mama.contract.BrowserControllerCommandPayload
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Comando tipado del controlador de navegador (ROADMAP §2.6, tarea F2).
@@ -162,10 +162,7 @@ public sealed class BrowserCommand {
 
             return when (action) {
                 Actions.NOOP -> Noop(id)
-                Actions.NAVIGATE ->
-                    withStringArg(id, action, args, "url", valid = String::isNotBlank) {
-                        Navigate(id, it)
-                    }
+                Actions.NAVIGATE -> parseNavigate(id, action, args)
                 Actions.SNAPSHOT -> TakeSnapshot(id, full = flag(args, "full"))
                 Actions.CLICK -> withStringArg(id, action, args, "ref") { Click(id, it) }
                 Actions.TYPE -> parseType(id, action, args)
@@ -179,6 +176,27 @@ public sealed class BrowserCommand {
             }
         }
 
+        /**
+         * `browser_navigate {url}` — esquema allowlist (frontera §8): el backend
+         * no filtra la URL en el camino routed («controller is authoritative»),
+         * así que la app sólo navega http(s) y `about:blank`. `javascript:`
+         * ejecutaría JS saltándose el masking `[password]` de F1, `data:`
+         * cargaría HTML arbitrario (phishing/prompt-injection) y `file:`/
+         * `content:` leerían recursos locales — todos → [Invalid].
+         */
+        private fun parseNavigate(
+            id: String,
+            action: String,
+            args: JsonObject,
+        ): BrowserCommand {
+            val url = (args["url"] as? JsonPrimitive)?.contentOrNull?.trim()
+            return when {
+                url.isNullOrEmpty() -> Invalid(id, action, "$action requires a \"url\" argument")
+                !isNavigableUrl(url) -> Invalid(id, action, "$action only supports http(s) URLs")
+                else -> Navigate(id, url)
+            }
+        }
+
         /** `browser_type {ref, text}` — `text` ausente equivale a "" (clear+type del backend). */
         private fun parseType(
             id: String,
@@ -186,9 +204,9 @@ public sealed class BrowserCommand {
             args: JsonObject,
         ): BrowserCommand {
             val ref =
-                args["ref"]?.jsonPrimitive?.contentOrNull
+                (args["ref"] as? JsonPrimitive)?.contentOrNull
                     ?: return Invalid(id, action, "$action requires a \"ref\" argument")
-            return Type(id, ref, text = args["text"]?.jsonPrimitive?.contentOrNull.orEmpty())
+            return Type(id, ref, text = (args["text"] as? JsonPrimitive)?.contentOrNull.orEmpty())
         }
 
         /** Acción de un argumento string requerido → comando tipado o [Invalid] con motivo. */
@@ -200,7 +218,7 @@ public sealed class BrowserCommand {
             valid: (String) -> Boolean = { true },
             build: (String) -> BrowserCommand,
         ): BrowserCommand {
-            val value = args[name]?.jsonPrimitive?.contentOrNull
+            val value = (args[name] as? JsonPrimitive)?.contentOrNull
             return if (value != null && valid(value)) {
                 build(value)
             } else {
@@ -213,8 +231,18 @@ public sealed class BrowserCommand {
             args: JsonObject,
             name: String,
         ): Boolean {
-            val primitive = args[name]?.jsonPrimitive ?: return false
+            val primitive = args[name] as? JsonPrimitive ?: return false
             return primitive.booleanOrNull ?: primitive.contentOrNull?.equals("true", ignoreCase = true) == true
         }
+
+        /**
+         * Esquemas navegables por la app (§8): el WebView es la única frontera —
+         * `AndroidWebViewDriver.loadUrl` repite esta guarda como defensa en
+         * profundidad.
+         */
+        public fun isNavigableUrl(url: String): Boolean =
+            url.startsWith("http://", ignoreCase = true) ||
+                url.startsWith("https://", ignoreCase = true) ||
+                url.equals("about:blank", ignoreCase = true)
     }
 }

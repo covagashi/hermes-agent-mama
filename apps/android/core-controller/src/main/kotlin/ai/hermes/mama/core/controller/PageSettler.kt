@@ -28,28 +28,35 @@ internal class PageSettler(
     /**
      * Suspende hasta que la página esté estable o se agote [navBudgetMs].
      * Nunca lanza: un WebView errático sólo hace volver antes de tiempo.
+     *
+     * @return el último [WebViewPageEvent.PageError] del frame principal visto
+     *   durante la navegación, o `null` si la carga fue limpia — el llamador lo
+     *   convierte en `ok:false` "Navigation failed: <desc>".
      */
     suspend fun awaitSettled(
         events: Flow<WebViewPageEvent>,
         navBudgetMs: Long,
         peekForNavigationMs: Long?,
-    ) = coroutineScope {
-        val channel = Channel<WebViewPageEvent>(capacity = Channel.UNLIMITED)
-        val collector = launch { events.collect { channel.send(it) } }
-        try {
-            val navStarted =
-                if (peekForNavigationMs != null) {
-                    awaitNavStart(channel, peekForNavigationMs)
+    ): WebViewPageEvent.PageError? =
+        coroutineScope {
+            val channel = Channel<WebViewPageEvent>(capacity = Channel.UNLIMITED)
+            val collector = launch { events.collect { channel.send(it) } }
+            try {
+                val navStarted =
+                    if (peekForNavigationMs != null) {
+                        awaitNavStart(channel, peekForNavigationMs)
+                    } else {
+                        true // navigate/back: la navegación viene dada por la propia acción
+                    }
+                if (navStarted) {
+                    drainUntilCalm(channel, navBudgetMs)
                 } else {
-                    true // navigate/back: la navegación viene dada por la propia acción
+                    null
                 }
-            if (navStarted) {
-                drainUntilCalm(channel, navBudgetMs)
+            } finally {
+                collector.cancel()
             }
-        } finally {
-            collector.cancel()
         }
-    }
 
     /**
      * Ventana de detección post-acción: `true` si empezó una navegación
@@ -78,13 +85,18 @@ internal class PageSettler(
      * Bucle principal: entra con una navegación en curso y sale cuando no hay
      * navegación pendiente y la red lleva [networkCalmMs] ms en calma, o al
      * agotar [navBudgetMs].
+     *
+     * @return el último [WebViewPageEvent.PageError] del frame principal (un
+     *   `PageFinished` posterior — p. ej. la página de error del sistema — no
+     *   lo borra: la navegación igualmente fracasó).
      */
     private suspend fun drainUntilCalm(
         channel: Channel<WebViewPageEvent>,
         navBudgetMs: Long,
-    ) {
+    ): WebViewPageEvent.PageError? {
         var navPending = true
         var lastActivity = nowMs()
+        var lastError: WebViewPageEvent.PageError? = null
         val deadline = lastActivity + navBudgetMs
         var waiting = true
         while (waiting) {
@@ -101,13 +113,19 @@ internal class PageSettler(
                         navPending = true
                         lastActivity = nowMs()
                     }
-                    is WebViewPageEvent.PageFinished, is WebViewPageEvent.PageError -> {
+                    is WebViewPageEvent.PageFinished -> {
                         navPending = false
                         lastActivity = nowMs()
+                    }
+                    is WebViewPageEvent.PageError -> {
+                        navPending = false
+                        lastActivity = nowMs()
+                        lastError = event
                     }
                     is WebViewPageEvent.ResourceLoaded -> lastActivity = nowMs()
                 }
             }
         }
+        return lastError
     }
 }

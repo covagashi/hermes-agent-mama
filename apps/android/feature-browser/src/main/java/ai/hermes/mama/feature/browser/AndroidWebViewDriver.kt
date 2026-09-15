@@ -1,5 +1,6 @@
 package ai.hermes.mama.feature.browser
 
+import ai.hermes.mama.core.controller.BrowserCommand
 import ai.hermes.mama.core.controller.WebViewDriver
 import ai.hermes.mama.core.controller.WebViewEventBus
 import ai.hermes.mama.core.controller.WebViewPageEvent
@@ -12,6 +13,7 @@ import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
+import android.view.ViewGroup
 import android.view.Window
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -50,12 +52,25 @@ public class AndroidWebViewDriver(
     private val bus = WebViewEventBus()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    init {
+        // WebView exige un Looper thread; el driver además confina todo a main.
+        check(Looper.myLooper() == Looper.getMainLooper()) {
+            "AndroidWebViewDriver must be created on the main thread"
+        }
+    }
+
     /** La vista real: la pantalla Navegador la monta como contenido. */
     public val webView: WebView =
         WebView(context).apply {
             @SuppressLint("SetJavaScriptEnabled") // imprescindible: los comandos son JS (§2.6)
             settings.javaScriptEnabled = true
+            // localStorage/sessionStorage: sin DOM storage los logins y SPAs reales se rompen.
+            settings.domStorageEnabled = true
             settings.safeBrowsingEnabled = true
+            // Frontera §8: el WebView no lee file:// ni content:// (la allowlist
+            // de navigate ya los veta; aquí cierra también la vía de redirects/iframes).
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
             webViewClient = ControllerWebViewClient()
         }
 
@@ -73,6 +88,11 @@ public class AndroidWebViewDriver(
         }
 
     override suspend fun loadUrl(url: String) {
+        // Defensa en profundidad: la allowlist vive en BrowserCommand.from;
+        // aquí se repite por si otra vía llegara a tocar el driver.
+        require(BrowserCommand.isNavigableUrl(url)) {
+            "Refusing to load non-http(s) URL: ${url.take(MAX_URL_TAG_CHARS)}"
+        }
         onMain { webView.loadUrl(url) }
     }
 
@@ -113,6 +133,10 @@ public class AndroidWebViewDriver(
 
     /** Libera el WebView (al cerrar la pantalla Navegador / Activity). */
     public fun destroy() {
+        check(Looper.myLooper() == Looper.getMainLooper()) {
+            "AndroidWebViewDriver.destroy() must run on the main thread"
+        }
+        (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
     }
 
@@ -224,5 +248,6 @@ public class AndroidWebViewDriver(
 
     private companion object {
         const val PNG_QUALITY = 100
+        const val MAX_URL_TAG_CHARS = 64
     }
 }

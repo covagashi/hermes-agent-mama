@@ -108,6 +108,29 @@ class WebViewControllerInstrumentedTest {
         }
 
     @Test
+    fun navigateAEsquemaNoHttpDevuelveInvalidSinTocarElWebView() =
+        runBlocking {
+            send("browser_navigate", commands.args("url" to url("/orders.html")))
+            val outcome = send("browser_navigate", commands.args("url" to "javascript:alert(1)"))
+            assertFalse(outcome.ok)
+            assertTrue(outcome.resultJson.contains("http(s)"))
+            // El WebView siguió en la página anterior: el esquema ni llegó al driver.
+            val tabs = assertOk(send("browser_tabs"))
+            assertTrue(tabs["tabs"].toString().contains("/orders.html"))
+        }
+
+    @Test
+    fun navigateAHostInexistenteDevuelveOkFalse() =
+        runBlocking {
+            // `.invalid` nunca resuelve (RFC 2606) → onReceivedError del frame
+            // principal → "Navigation failed: net::ERR_*" en vez de ok:true.
+            val outcome =
+                send("browser_navigate", commands.args("url" to "https://hermes.example.invalid/"))
+            assertFalse(outcome.ok)
+            assertTrue(outcome.resultJson, outcome.resultJson.contains("Navigation failed"))
+        }
+
+    @Test
     fun snapshotCoincideConElGoldenCompacto() =
         runBlocking {
             send("browser_navigate", commands.args("url" to url("/orders.html")))

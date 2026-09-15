@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -103,6 +104,20 @@ public class WebViewController(
                 "Duplicate command_id \"${command.commandId.take(MAX_WIRE_TAG_CHARS)}\"",
             )
         }
+        // Si el job muere sin correr su cuerpo (cancel en la ventana
+        // putIfAbsent→start, scope ya muerto o un Error fuera de Exception),
+        // outcome.await() no puede colgar: la muerte del job produce resultado.
+        job.invokeOnCompletion { cause ->
+            if (!outcome.isCompleted) {
+                val reason =
+                    when {
+                        cause == null || cause is CancellationException -> "Command cancelled"
+                        cause is Exception -> humanError(cause)
+                        else -> cause.message?.take(MAX_ERROR_CHARS) ?: "Command failed"
+                    }
+                outcome.complete(BrowserCommandOutcome.failure(reason))
+            }
+        }
         job.start()
         return try {
             outcome.await()
@@ -115,11 +130,19 @@ public class WebViewController(
         }
     }
 
-    /** `browser.controller.cancel {command_id}` → aborta el comando si sigue vivo. */
+    /**
+     * `browser.controller.cancel {command_id}` → aborta el comando si sigue
+     * vivo. Un job ya completado (ventana completado→remove del mapa) devuelve
+     * false: el resultado §2.6 ya se entregó, no hay nada que cancelar.
+     */
     public fun cancel(commandId: String): Boolean =
         inflight[commandId]?.let { job ->
-            job.cancel()
-            true
+            if (job.isActive) {
+                job.cancel()
+                true
+            } else {
+                false
+            }
         } == true
 
     /** Aborta todo lo en curso (detach de la sesión controladora, F3). */
@@ -157,7 +180,10 @@ public class WebViewController(
     private suspend fun navigate(command: BrowserCommand.Navigate): BrowserCommandOutcome {
         val events = driver.pageEventsSince()
         driver.loadUrl(command.url)
-        settler.awaitSettled(events, timeouts.navSettleMs, peekForNavigationMs = null)
+        val navError = settler.awaitSettled(events, timeouts.navSettleMs, peekForNavigationMs = null)
+        if (navError != null) {
+            return navigationError(navError)
+        }
         // takeSnapshot ya hace ensureHermes: el mundo JS post-navegación se reconstruye ahí.
         val snap = takeSnapshot(full = false)
         val finalUrl = driver.currentUrl() ?: command.url
@@ -186,6 +212,10 @@ public class WebViewController(
     /** click/type/press/scroll: eval `__hermes.<fn>` → 300 ms + comprobación de navegación. */
     private suspend fun jsAction(call: String): BrowserCommandOutcome {
         ensureHermes()
+        // Marca ANTES del eval: un PageStarted emitido durante la acción también
+        // cuenta (si se marcara después, quedaría filtrado y leeríamos un DOM
+        // a medio cargar en el siguiente snapshot).
+        val events = driver.pageEventsSince()
         val result = evalHermes(call)
         if (result["success"]?.jsonPrimitive?.booleanOrNull == false) {
             val error =
@@ -193,7 +223,7 @@ public class WebViewController(
                     ?: "Action failed"
             return BrowserCommandOutcome.failure(error)
         }
-        postActionSettle()
+        postActionSettle(events)
         // El objeto JS ya tiene la forma exacta de §2.6: se pasa verbatim.
         return BrowserCommandOutcome.ok(result.toString())
     }
@@ -205,12 +235,14 @@ public class WebViewController(
         }
         val events = driver.pageEventsSince()
         driver.goBack()
-        settler.awaitSettled(events, timeouts.navSettleMs, peekForNavigationMs = null)
-        ensureHermes()
-        val url = driver.currentUrl().orEmpty()
-        return BrowserCommandOutcome.ok(
-            CommandResults.success { put("url", url) },
-        )
+        val navError = settler.awaitSettled(events, timeouts.navSettleMs, peekForNavigationMs = null)
+        return if (navError != null) {
+            navigationError(navError)
+        } else {
+            ensureHermes()
+            val url = driver.currentUrl().orEmpty()
+            BrowserCommandOutcome.ok(CommandResults.success { put("url", url) })
+        }
     }
 
     /** `browser_screenshot` → PNG base64 con `max(width,height)` ≤ 1 200 px (§5/F2). */
@@ -305,10 +337,18 @@ public class WebViewController(
      * navegación — si la acción abrió una página nueva, se espera a que cargue
      * (mismo criterio que navigate, dentro del presupuesto total del comando).
      */
-    private suspend fun postActionSettle() {
-        val events = driver.pageEventsSince()
+    private suspend fun postActionSettle(events: Flow<WebViewPageEvent>) {
         delay(timeouts.actionSettleMs)
         settler.awaitSettled(events, timeouts.navSettleMs, peekForNavigationMs = timeouts.actionNavPeekMs)
+    }
+
+    /**
+     * `onReceivedError` del frame principal → `ok:false` "Navigation failed:
+     * <desc>" (sin él, un host caído devolvería ok:true con la página de error).
+     */
+    private fun navigationError(pageError: WebViewPageEvent.PageError): BrowserCommandOutcome {
+        val reason = pageError.description.ifBlank { "unknown error" }.take(MAX_ERROR_CHARS)
+        return BrowserCommandOutcome.failure("Navigation failed: $reason")
     }
 
     // -------------------------------------------------------------- helpers ---
