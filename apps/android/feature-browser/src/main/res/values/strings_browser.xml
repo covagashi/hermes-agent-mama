@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Textos de la pantalla Navegador (§5/F3-F4). El copy visible lo fija el
+  roadmap — español base, frases cortas y claras para la usuaria.
+-->
+<resources>
+    <!-- Aviso al auto-navegar cuando un tool browser_* arranca (ControllerSignal.NavigateToBrowser). -->
+    <string name="browser_auto_open_notice">Hermes va a usar el navegador</string>
+
+    <!-- Estado ServerNotEnabled: el servidor respondió 4403 al registro del controlador. -->
+    <string name="browser_server_not_enabled">El servidor no tiene activado el navegador compartido</string>
+</resources>
