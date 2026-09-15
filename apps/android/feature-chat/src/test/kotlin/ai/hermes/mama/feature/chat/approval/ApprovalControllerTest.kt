@@ -48,7 +48,7 @@ class ApprovalControllerTest {
             assertEquals("Enviar un correo a Farmacia del Barrio", card.detail)
             assertEquals(ApprovalStatus.Pending, card.status)
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
 
             assertEquals(ApprovalStatus.Approved, controller.card.value?.status)
@@ -73,7 +73,7 @@ class ApprovalControllerTest {
             transport.emit(approvalFrame(id = "srq-2", requestId = "req-7", description = "Borrar un archivo"))
             runCurrent()
 
-            controller.deny()
+            controller.deny(controller.headKey())
             runCurrent()
 
             // La elección queda visible answeredVisibleMs y después la tarjeta se cierra sola.
@@ -140,7 +140,7 @@ class ApprovalControllerTest {
 
             assertNotNull(controller.card.value, "sigue habiendo una sola tarjeta")
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
 
             val response = transport.sentResponses().single()
@@ -159,7 +159,7 @@ class ApprovalControllerTest {
 
             transport.emit(approvalFrame(id = "srq-7", requestId = "req-11", description = "Enviar un correo"))
             runCurrent()
-            controller.deny()
+            controller.deny(controller.headKey())
             runCurrent()
             assertEquals(1, transport.sentResponses().size)
 
@@ -204,7 +204,7 @@ class ApprovalControllerTest {
             assertEquals(ApprovalKind.BrowseWeb, card.kind)
             assertEquals("Descargar factura PDF", card.detail)
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
 
             val respondCall = transport.sentCalls("approval.respond").single()
@@ -224,23 +224,11 @@ class ApprovalControllerTest {
             val transport = FakeTransport()
             val controller = newController(transport)
 
-            suspend fun resyncWith(vararg requestIds: String) {
-                val resync = async { controller.resync("sess-1") }
-                runCurrent()
-                val call = transport.sentCalls("approval.pending").last()
-                val items =
-                    requestIds.joinToString(",") { rid ->
-                        """{"request_id":"$rid","description":"Algo"}"""
-                    }
-                transport.emit("""{"id":${call.getValue("id").jsonPrimitive.long},"result":{"approvals":[$items]}}""")
-                resync.await()
-            }
-
-            resyncWith("req-1", "req-2")
+            resyncWithIds(controller, transport, "req-1", "req-2")
             assertNotNull(controller.card.value)
 
             // La segunda re-sync ya no trae req-1/req-2: las resolvió otra superficie.
-            resyncWith()
+            resyncWithIds(controller, transport)
             assertNull(controller.card.value, "entradas ausentes en el servidor → la tarjeta se cierra")
         }
 
@@ -262,7 +250,7 @@ class ApprovalControllerTest {
             )
             resync.await()
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
 
             // La respuesta sale por el wire vivo (srq-9), no por approval.respond.
@@ -283,25 +271,16 @@ class ApprovalControllerTest {
             val transport = FakeTransport()
             val controller = newController(transport)
 
-            suspend fun resyncWith(vararg requestIds: String) {
-                val resync = async { controller.resync("sess-1") }
-                runCurrent()
-                val call = transport.sentCalls("approval.pending").last()
-                val items = requestIds.joinToString(",") { """{"request_id":"$it"}""" }
-                transport.emit("""{"id":${call.getValue("id").jsonPrimitive.long},"result":{"approvals":[$items]}}""")
-                resync.await()
-            }
-
             // 1) llega por approval.pending; 2) el wire la re-entrega (mismo request_id);
             // 3) la siguiente re-sync ya no la trae — pero ahora la gobierna el wire.
-            resyncWith("req-50")
+            resyncWithIds(controller, transport, "req-50")
             transport.emit(approvalFrame(id = "srq-20", requestId = "req-50", description = "Enviar un correo"))
             runCurrent()
-            resyncWith()
+            resyncWithIds(controller, transport)
 
             assertNotNull(controller.card.value, "la entrada del wire no la poda la re-sync")
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
             // La respuesta sale por el frame vivo, no por approval.respond.
             assertTrue(transport.sentCalls("approval.respond").isEmpty())
@@ -313,6 +292,203 @@ class ApprovalControllerTest {
                     .getValue("id")
                     .jsonPrimitive.content,
             )
+        }
+
+    @Test
+    fun `request cancel cierra una resync re-ligada al wire por su id de frame`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            // Llega por approval.pending (sin frame) y luego el wire la re-entrega:
+            // el cancel del servidor referencia el id de frame nuevo, no request_id.
+            resyncWithIds(controller, transport, "req-50")
+            transport.emit(approvalFrame(id = "srq-20", requestId = "req-50", description = "Enviar un correo"))
+            runCurrent()
+
+            transport.emit(cancelFrame(id = "srq-20"))
+            runCurrent()
+
+            assertNull(controller.card.value, "request.cancel con el srq de la re-entrega debe cerrar la tarjeta")
+        }
+
+    @Test
+    fun `approve con la key de otra tarjeta no responde la cabeza`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            transport.emit(approvalFrame(id = "srq-30", requestId = "req-30", description = "Primera acción"))
+            transport.emit(approvalFrame(id = "srq-31", requestId = "req-31", description = "Segunda acción"))
+            runCurrent()
+
+            // La cabeza cambia entre render y tap: el cancel retira req-30 y
+            // req-31 pasa a mostrarse. Un tap "viejo" sobre req-30 es no-op.
+            transport.emit(cancelFrame(id = "srq-30"))
+            runCurrent()
+
+            controller.approve("req-30")
+            runCurrent()
+            assertTrue(transport.sentResponses().isEmpty(), "una key retirada no responde nada")
+
+            val shown = assertNotNull(controller.card.value)
+            assertEquals("req-31", shown.key)
+            controller.approve(shown.key)
+            runCurrent()
+            assertEquals(
+                "srq-31",
+                transport
+                    .sentResponses()
+                    .single()
+                    .getValue("id")
+                    .jsonPrimitive.content,
+            )
+        }
+
+    @Test
+    fun `fallo de approval respond muestra error y el reintento responde`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            resyncWithIds(controller, transport, "req-60")
+            val key = controller.headKey()
+
+            // El servidor rechaza la respuesta (error RPC): canal sigue vivo,
+            // la tarjeta muestra el fallo y Sí sigue pulsable.
+            controller.approve(key)
+            runCurrent()
+            val failed = transport.sentCalls("approval.respond").single()
+            transport.emit(
+                """{"id":${failed.getValue("id").jsonPrimitive.long},"error":{"code":-32000,"message":"boom"}}""",
+            )
+            runCurrent()
+            assertEquals(ApprovalStatus.SendFailed, controller.card.value?.status)
+
+            controller.approve(key)
+            runCurrent()
+            val retry = transport.sentCalls("approval.respond").last()
+            transport.emit("""{"id":${retry.getValue("id").jsonPrimitive.long},"result":{"resolved":1}}""")
+            runCurrent()
+            assertEquals(ApprovalStatus.Approved, controller.card.value?.status)
+        }
+
+    @Test
+    fun `approval respond con resolved 0 cierra la tarjeta`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            resyncWithIds(controller, transport, "req-61")
+            controller.approve(controller.headKey())
+            runCurrent()
+
+            // resolved:0 = ya la resolvió otra superficie → cerrar sin ruido.
+            val call = transport.sentCalls("approval.respond").single()
+            transport.emit("""{"id":${call.getValue("id").jsonPrimitive.long},"result":{"resolved":0}}""")
+            runCurrent()
+
+            assertNull(controller.card.value)
+        }
+
+    @Test
+    fun `fallo de approval pending deja la resync sin efecto`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            val resync = async { controller.resync("sess-1") }
+            runCurrent()
+            val call = transport.sentCalls("approval.pending").single()
+            transport.emit(
+                """{"id":${call.getValue("id").jsonPrimitive.long},"error":{"code":-32000,"message":"boom"}}""",
+            )
+            resync.await()
+
+            assertNull(controller.card.value, "una resync fallida no muestra ni tumba nada")
+        }
+
+    @Test
+    fun `doble tap concurrente emite una sola respuesta`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            transport.emit(approvalFrame(id = "srq-40", requestId = "req-40", description = "Enviar un correo"))
+            runCurrent()
+            val key = controller.headKey()
+
+            controller.approve(key)
+            controller.approve(key)
+            controller.deny(key)
+            runCurrent()
+
+            assertEquals(1, transport.sentResponses().size, "Sí+Sí+No simultáneos = una respuesta")
+            assertEquals(ApprovalStatus.Approved, controller.card.value?.status)
+        }
+
+    @Test
+    fun `cola de clarify llena responde cancel-all a la que no cabe`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            fun clarifyFrame(i: Int) =
+                """{"id":"srq-c$i","method":"clarify","params":{"session_id":"sess-1","question":"¿algo?"}}"""
+
+            // Nadie colecta clarifyRequests: las primeras 64 llenan la cola
+            // (a tandas, para no desbordar el buffer SharedFlow del canal, 64).
+            repeat(64) { i ->
+                transport.emit(clarifyFrame(i))
+            }
+            runCurrent()
+
+            // La 65ª no cabe → cancel-all (result {} vacío) en vez de quedarse
+            // colgando el backend.
+            transport.emit(clarifyFrame(64))
+            runCurrent()
+
+            val dismissed = transport.sentResponses().single()
+            assertEquals("srq-c64", dismissed.getValue("id").jsonPrimitive.content)
+            assertTrue(
+                dismissed.getValue("result").jsonObject.isEmpty(),
+                "cancel-all = result vacío (doc del schema)",
+            )
+        }
+
+    @Test
+    fun `start tras close reanuda la cola y las clarifies siguen llegando`() =
+        runTest {
+            val transport = FakeTransport()
+            val controller = newController(transport)
+
+            transport.emit(approvalFrame(id = "srq-70", requestId = "req-70", description = "Primera"))
+            runCurrent()
+            controller.close()
+            assertNull(controller.card.value)
+
+            // Llega durante el stop: queda en el canal del client hasta el restart.
+            transport.emit(approvalFrame(id = "srq-71", requestId = "req-71", description = "Segunda"))
+            controller.start()
+            runCurrent()
+
+            // La pendiente sobrevive el stop (el servidor la sigue esperando)
+            // y la nueva se ha drenado detrás en la cola.
+            val revived = assertNotNull(controller.card.value, "start tras close recolecta otra vez")
+            assertEquals("req-70", revived.key)
+            controller.approve(revived.key)
+            runCurrent()
+            advanceTimeBy(VISIBLE_MS + 1)
+            runCurrent()
+            assertEquals("req-71", controller.card.value?.key)
+
+            val clarify = async { controller.clarifyRequests.first() }
+            runCurrent()
+            transport.emit(
+                """{"id":"srq-72","method":"clarify","params":{"session_id":"sess-1","question":"¿té o café?"}}""",
+            )
+            runCurrent()
+            assertEquals("srq-72", clarify.await().id, "la cola de clarify no queda cerrada tras el restart")
         }
 
     @Test
@@ -329,7 +505,7 @@ class ApprovalControllerTest {
             client.close()
             runCurrent()
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
 
             assertEquals(ApprovalStatus.SendFailed, controller.card.value?.status)
@@ -354,7 +530,7 @@ class ApprovalControllerTest {
 
             assertEquals("Primera acción", controller.card.value?.detail)
 
-            controller.approve()
+            controller.approve(controller.headKey())
             runCurrent()
             advanceTimeBy(VISIBLE_MS + 1)
             runCurrent()
@@ -393,6 +569,23 @@ class ApprovalControllerTest {
         }
 
     // --- soporte ---
+
+    /** La `key` de la tarjeta visible — lo que la UI pasaría a approve/deny. */
+    private fun ApprovalController.headKey(): String = card.value?.key ?: error("tarjeta no visible")
+
+    /** Corre una [ApprovalController.resync] contestando `approval.pending` con los request_ids dados. */
+    private suspend fun TestScope.resyncWithIds(
+        controller: ApprovalController,
+        transport: FakeTransport,
+        vararg requestIds: String,
+    ) {
+        val resync = async { controller.resync("sess-1") }
+        runCurrent()
+        val call = transport.sentCalls("approval.pending").last()
+        val items = requestIds.joinToString(",") { """{"request_id":"$it","description":"Algo"}""" }
+        transport.emit("""{"id":${call.getValue("id").jsonPrimitive.long},"result":{"approvals":[$items]}}""")
+        resync.await()
+    }
 
     private fun TestScope.newController(transport: FakeTransport): ApprovalController {
         val client =

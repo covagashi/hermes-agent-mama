@@ -317,6 +317,7 @@ private fun ApprovalKind.icon(): ImageVector =
 private fun scrimColor() = MaterialTheme.colorScheme.onBackground.copy(alpha = SCRIM_ALPHA)
 
 private const val SCRIM_ALPHA = 0.45f
+private const val PREVIEW_KEY = "preview"
 private const val MAX_DETAIL_LINES = 6
 
 @Preview(name = "Aprobación pendiente", showBackground = true, widthDp = 390)
@@ -332,6 +333,7 @@ private fun ApprovalOverlayPendingPreview() {
         ApprovalOverlay(
             state =
                 ApprovalCardState(
+                    key = PREVIEW_KEY,
                     kind = ApprovalKind.SendEmail,
                     detail = stringResource(R.string.approval_example_detail),
                 ),
@@ -348,6 +350,7 @@ private fun ApprovalCardAnsweredPreview() {
         ApprovalCard(
             state =
                 ApprovalCardState(
+                    key = PREVIEW_KEY,
                     kind = ApprovalKind.BrowseWeb,
                     detail = stringResource(R.string.approval_example_detail),
                     status = ApprovalStatus.Approved,
@@ -365,6 +368,7 @@ private fun ApprovalCardFailedPreview() {
         ApprovalCard(
             state =
                 ApprovalCardState(
+                    key = PREVIEW_KEY,
                     kind = ApprovalKind.RunCommand,
                     detail = "rsync -av --progress",
                     status = ApprovalStatus.SendFailed,

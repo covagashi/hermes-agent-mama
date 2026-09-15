@@ -6,6 +6,14 @@ package ai.hermes.mama.feature.chat.approval
  * conoce `ApprovalRequest` ni el contrato del gateway.
  */
 data class ApprovalCardState(
+    /**
+     * Id opaco de la aprobación en cola (el `request_id` del servidor, o el id
+     * de frame si aquél falta). La UI lo devuelve tal cual a
+     * `ApprovalController.approve(key)`/`deny(key)`: un `request.cancel` que
+     * cambie la cabeza entre el render y el tap no puede aprobar una tarjeta
+     * que la usuaria no vio.
+     */
+    val key: String,
     /** Familia de la acción (del `tool_name` humanizado) → título e icono. */
     val kind: ApprovalKind,
     /**

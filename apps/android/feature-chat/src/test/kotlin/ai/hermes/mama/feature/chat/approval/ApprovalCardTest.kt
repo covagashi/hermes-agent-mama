@@ -165,6 +165,7 @@ class ApprovalCardTest {
 
     private fun pendingState() =
         ApprovalCardState(
+            key = "req-test",
             kind = ApprovalKind.SendEmail,
             detail = DETAIL,
             status = ApprovalStatus.Pending,

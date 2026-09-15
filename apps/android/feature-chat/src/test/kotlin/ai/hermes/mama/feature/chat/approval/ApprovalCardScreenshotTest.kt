@@ -103,6 +103,7 @@ class ApprovalCardScreenshotTest {
 @Composable
 private fun stateOf(status: ApprovalStatus) =
     ApprovalCardState(
+        key = "req-shot",
         kind = ApprovalKind.SendEmail,
         detail = stringResource(R.string.approval_example_detail),
         status = status,

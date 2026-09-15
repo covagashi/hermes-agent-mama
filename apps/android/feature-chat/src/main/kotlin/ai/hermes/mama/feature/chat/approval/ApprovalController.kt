@@ -75,6 +75,10 @@ class ApprovalController(
     private var collectors: List<Job> = emptyList()
     private var hideJob: Job? = null
 
+    /** `true` tras [close()]: corta [publish] tardíos (p. ej. un resync en vuelo); [start] lo resetea. */
+    @Volatile
+    private var closed = false
+
     private val _card = MutableStateFlow<ApprovalCardState?>(null)
 
     /** La tarjeta visible, o `null` si no hay aprobación pendiente. */
@@ -83,6 +87,8 @@ class ApprovalController(
     // Cola acotada como la del canal: una clarify no entregada no debe
     // desaparecer en silencio (el backend se queda esperando). Si nadie la
     // recoge (C7 aún no colecta), se responde cancel-all para no colgarla.
+    // Vive lo que vive el controller (nunca se cierra): un stop/start del
+    // lifecycle de C8 no puede dejarla muerta ni perder lo encolado.
     private val clarifyQueue = Channel<ClarifyRequest>(capacity = CLARIFY_QUEUE_CAPACITY)
 
     /** Peticiones `clarify` reenviadas tal cual llegan — el punto de enganche de C7. */
@@ -97,33 +103,46 @@ class ApprovalController(
         require(answeredVisibleMs > 0) { "answeredVisibleMs debe ser > 0" }
     }
 
-    /** Empieza a colectar peticiones y `request.cancel`. Idempotente. */
+    /**
+     * Empieza a colectar peticiones y `request.cancel`. Idempotente y
+     * reiniciable: `close()` para el ciclo, `start()` abre otro — pensado para
+     * el lifecycle de la pantalla (C8). La cola de aprobaciones y la de
+     * clarify sobreviven el stop: el servidor las sigue esperando.
+     */
     fun start() {
         if (collectors.isNotEmpty()) {
             return
         }
+        closed = false
         collectors =
             listOf(
                 scope.launch { collectServerRequests() },
                 scope.launch { collectCancels() },
             )
+        // Re-publica la cabeza superviviente del ciclo anterior (si la hubo).
+        scope.launch { mutex.withLock { publish() } }
     }
 
-    /** Detiene los colectores, cierra la cola de clarify y oculta la tarjeta (el client vive o muere fuera). */
+    /** Detiene los colectores y oculta la tarjeta (el client vive o muere fuera; [start] reabre). */
     fun close() {
+        closed = true
         collectors.forEach { it.cancel() }
         collectors = emptyList()
         hideJob?.cancel()
         hideJob = null
-        clarifyQueue.close()
         _card.value = null
     }
 
-    /** La usuaria pulsó "Sí, adelante" → `{"choice":"once"}` (§2.5). */
-    fun approve() = choose(approved = true)
+    /**
+     * La usuaria pulsó "Sí, adelante" → `{"choice":"once"}` (§2.5). [key] es
+     * la de la tarjeta que vio ([ApprovalCardState.key]): si un `request.cancel`
+     * cambió la cabeza entre el render y el tap, la elección va a la tarjeta
+     * mostrada o no va — nunca a la siguiente encolada sin leer.
+     */
+    fun approve(key: String) = choose(key = key, approved = true)
 
-    /** La usuaria pulsó "No" → `{"choice":"deny"}` (§2.5). */
-    fun deny() = choose(approved = false)
+    /** La usuaria pulsó "No" → `{"choice":"deny"}` (§2.5). Ver [approve]. */
+    fun deny(key: String) = choose(key = key, approved = false)
 
     /**
      * Re-sincroniza tras una reconexión (C6): `approval.pending` devuelve las
@@ -197,7 +216,16 @@ class ApprovalController(
             val key = request.requestId.ifBlank { request.id }
             val existing = entries.firstOrNull { it.key == key }
             if (existing != null) {
+                // Re-liga al objeto nuevo (el viejo respondía por un socket
+                // muerto) y refresca lo pintado — la re-entrega puede traer
+                // description/tool_name distintos de los de approval.pending.
                 existing.live = request
+                existing.kind = approvalKindFor(request.params.toolName)
+                existing.detail = plainDetail(request.params.description, request.params.command)
+                existing.sessionId = request.sessionId
+                if (request.requestId.isNotBlank()) {
+                    existing.requestId = request.requestId
+                }
                 // El wire toma posesión: aunque llegó por approval.pending, ya
                 // no la poda una re-sync — su ciclo de vida es el wire.
                 existing.synced = false
@@ -206,6 +234,7 @@ class ApprovalController(
                     ApprovalStatus.Denied -> reAnswerLocked(request, approved = false)
                     else -> Unit // Pendiente o SendFailed: la usuaria sigue decidiendo.
                 }
+                publish()
                 return@withLock
             }
             entries.addLast(liveEntry(key, request))
@@ -236,19 +265,24 @@ class ApprovalController(
 
     // --- respuestas ---
 
-    private fun choose(approved: Boolean) {
+    private fun choose(
+        key: String,
+        approved: Boolean,
+    ) {
         scope.launch {
             val entry =
                 mutex.withLock {
-                    val head = entries.firstOrNull()
-                    if (head == null || !head.isAnswerable()) {
+                    // La tarjeta que la usuaria vio — NO la cabeza actual: un
+                    // cancel entre render y tap no puede responder otra.
+                    val shown = entries.firstOrNull { it.key == key }
+                    if (shown == null || !shown.isAnswerable()) {
                         return@withLock null
                     }
-                    head.responding = true
+                    shown.responding = true
                     // Reintento tras SendFailed: quita el aviso mientras se envía.
-                    head.status = ApprovalStatus.Pending
+                    shown.status = ApprovalStatus.Pending
                     publish()
-                    head
+                    shown
                 } ?: return@launch
             val outcome =
                 runCatching { answerEntry(entry, approved) }
@@ -344,7 +378,6 @@ class ApprovalController(
     ): Entry =
         Entry(
             key = key,
-            frameId = request.id,
             requestId = request.requestId,
             sessionId = request.sessionId,
             kind = approvalKindFor(request.params.toolName),
@@ -360,7 +393,6 @@ class ApprovalController(
     ): Entry =
         Entry(
             key = requestId,
-            frameId = null,
             requestId = requestId,
             sessionId = sessionId,
             kind = approvalKindFor(pending.toolName),
@@ -370,9 +402,17 @@ class ApprovalController(
         )
 
     private fun publish() {
+        if (closed) {
+            return
+        }
         _card.value =
             entries.firstOrNull()?.let { head ->
-                ApprovalCardState(kind = head.kind, detail = head.detail, status = head.status)
+                ApprovalCardState(
+                    key = head.key,
+                    kind = head.kind,
+                    detail = head.detail,
+                    status = head.status,
+                )
             }
     }
 
@@ -387,17 +427,18 @@ class ApprovalController(
      */
     private class Entry(
         val key: String,
-        /** Id de frame (`srq-…`) — el que `request.cancel` referencia (sólo vivas). */
-        val frameId: String?,
         /** `request_id` de la cola del servidor — el que `approval.respond` usa. */
-        val requestId: String?,
+        var requestId: String?,
         /** Runtime `session_id` — lo piden `approval.pending`/`approval.respond`. */
-        val sessionId: String,
-        val kind: ApprovalKind,
-        val detail: String?,
+        var sessionId: String,
+        var kind: ApprovalKind,
+        var detail: String?,
         /** `true` si la gobierna `approval.pending` (re-sync); pasa a `false` al re-ligar un frame vivo del wire. */
         var synced: Boolean,
-        /** Petición viva ligada a la entrada (se re-liga en re-entregas). */
+        /**
+         * Petición viva ligada a la entrada (se re-liga en re-entregas). Su `id`
+         * de frame (`srq-…`) es el que referencia `request.cancel`.
+         */
         var live: ApprovalRequest?,
     ) {
         /** Tocado sólo bajo el mutex del controller. */
@@ -410,7 +451,11 @@ class ApprovalController(
         fun isAnswerable(): Boolean =
             !responding && (status == ApprovalStatus.Pending || status == ApprovalStatus.SendFailed)
 
-        fun matchesCancel(id: String): Boolean = frameId == id || requestId == id
+        /**
+         * `request.cancel {id}`: el `id` es el de frame (`srq-…`) — o el
+         * `request_id`, por si el backend envía éste.
+         */
+        fun matchesCancel(id: String): Boolean = live?.id == id || requestId == id
     }
 
     /** Resultado de intentar enviar la respuesta. */
