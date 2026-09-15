@@ -1,7 +1,10 @@
 package ai.hermes.mama.gateway
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
@@ -9,6 +12,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -217,19 +221,21 @@ class BasicAuthSessionTest {
             val server = newServer()
             server.enqueue(loginOk()) // login inicial
             server.enqueue(json(401, "")) // 1er ws-ticket: cookies caducadas
+            server.enqueue(json(401, "")) // reintento bajo lock: siguen muertas
             server.enqueue(loginOk()) // re-login automático
-            server.enqueue(ticketOk("tk-2")) // 2º ws-ticket
+            server.enqueue(ticketOk("tk-2")) // último ws-ticket
             val session = newSession(server)
             session.login("usuario", "mama")
 
             val ticket = session.wsTicket()
 
             assertEquals("tk-2", ticket.ticket)
-            assertEquals(4, server.requestCount, "un solo re-login antes del segundo intento")
+            assertEquals(5, server.requestCount, "un solo re-login antes del último intento")
             val paths = server.takeRequestSequence().map(RecordedRequest::path)
             assertEquals(
                 listOf(
                     "/auth/password-login",
+                    "/api/auth/ws-ticket",
                     "/api/auth/ws-ticket",
                     "/auth/password-login",
                     "/api/auth/ws-ticket",
@@ -244,12 +250,13 @@ class BasicAuthSessionTest {
             val server = newServer()
             server.enqueue(loginOk())
             server.enqueue(json(401, "")) // ws-ticket 401
+            server.enqueue(json(401, "")) // reintento bajo lock: 401
             server.enqueue(json(401, "")) // re-login 401
             val session = newSession(server)
             session.login("usuario", "mama")
 
             assertFailsWith<AuthException.SessionExpired> { session.wsTicket() }
-            assertEquals(3, server.requestCount, "re-login UNA vez — no más")
+            assertEquals(4, server.requestCount, "re-login UNA vez — no más")
         }
 
     @Test
@@ -258,6 +265,7 @@ class BasicAuthSessionTest {
             val server = newServer()
             server.enqueue(loginOk())
             server.enqueue(json(401, "")) // ws-ticket 401
+            server.enqueue(json(401, "")) // reintento bajo lock: 401
             server.enqueue(loginOk()) // re-login ok
             server.enqueue(json(401, "")) // ws-ticket sigue en 401
             val session = newSession(server)
@@ -282,14 +290,54 @@ class BasicAuthSessionTest {
         runTest {
             val server = newServer()
             server.enqueue(json(401, "")) // ws-ticket 401 (app recién arrancada, cookies viejas)
+            server.enqueue(json(401, "")) // reintento bajo lock: siguen muertas
             server.enqueue(loginOk()) // re-login con creds restauradas
             server.enqueue(ticketOk("tk-9"))
             val session = newSession(server)
             session.setCredentials(Credentials("usuario", "mama"))
 
             assertEquals("tk-9", session.wsTicket().ticket)
-            val loginRequest = server.takeRequestSequence()[1]
+            val loginRequest = server.takeRequestSequence()[2]
             assertTrue("\"username\":\"usuario\"" in loginRequest.body.readUtf8())
+        }
+
+    @Test
+    fun `dos wsTicket concurrentes con cookies muertas provocan un solo re-login`() =
+        runTest {
+            val server = newServer()
+            // Todo ticket da 401 hasta que llega un password-login (cookies
+            // frescas): determinista en cualquier interleaving — el perdedor
+            // del lock reintenta el ticket con el jar ya refrescado y no
+            // necesita re-loguear.
+            val loggedIn = AtomicBoolean(false)
+            server.dispatcher =
+                object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest): MockResponse =
+                        when {
+                            request.path == "/auth/password-login" -> {
+                                loggedIn.set(true)
+                                loginOk()
+                            }
+                            request.path == "/api/auth/ws-ticket" && !loggedIn.get() -> json(401, "")
+                            request.path == "/api/auth/ws-ticket" -> ticketOk("tk-conc")
+                            else -> json(404, "")
+                        }
+                }
+            val session = newSession(server)
+            session.setCredentials(Credentials("usuario", "mama"))
+
+            val tickets =
+                coroutineScope {
+                    listOf(
+                        async { session.wsTicket() },
+                        async { session.wsTicket() },
+                    ).map { it.await().ticket }
+                }
+
+            assertEquals(listOf("tk-conc", "tk-conc"), tickets)
+            val logins =
+                server.takeRequestSequence().count { it.path == "/auth/password-login" }
+            assertEquals(1, logins, "el segundo wsTicket reutiliza el jar del primer re-login")
         }
 
     // --- wsUrl / connectParams (§2.1.4, §8) ---
@@ -321,6 +369,16 @@ class BasicAuthSessionTest {
         assertFailsWith<AuthException.CleartextForbidden> {
             BasicAuthSession("http://hermes.example.invalid".toHttpUrl())
         }
+        // "127." como prefijo de un dominio NO es loopback: exige dotted-quad real.
+        assertFailsWith<AuthException.CleartextForbidden> {
+            BasicAuthSession("http://127.evil.com".toHttpUrl())
+        }
+        assertFailsWith<AuthException.CleartextForbidden> {
+            BasicAuthSession("http://127.0.0.1.evil.com".toHttpUrl())
+        }
+        assertFailsWith<AuthException.CleartextForbidden> {
+            BasicAuthSession("http://127.999.0.1".toHttpUrl())
+        }
         // Flavor dev: cleartext a cualquier host.
         val dev = BasicAuthSession("http://hermes.example.invalid".toHttpUrl(), allowCleartext = true)
         assertTrue(dev.wsUrl("t").startsWith("ws://hermes.example.invalid/api/ws"))
@@ -342,6 +400,25 @@ class BasicAuthSessionTest {
             assertTrue(first.url.startsWith("ws://"), "MockWebServer es http → ws")
             assertTrue("ticket=tk-uno" in first.url)
             assertTrue("ticket=tk-dos" in second.url, "cada intento lleva ticket nuevo (un solo uso)")
+        }
+
+    @Test
+    fun `MalformedResponse no filtra el cuerpo en su cause ni su mensaje`() =
+        runTest {
+            val server = newServer()
+            // JSON truncado: la SerializationException incrusta el fragmento.
+            server.enqueue(json(200, """{"ticket":"SECRETO-EN-BODY-7"""))
+            val session = newSession(server)
+
+            val error =
+                assertFailsWith<AuthException.MalformedResponse> {
+                    session.wsTicket()
+                }
+            assertTrue("SECRETO-EN-BODY-7" !in (error.message ?: ""), "message limpio (§8)")
+            assertTrue(
+                "SECRETO-EN-BODY-7" !in (error.cause?.message ?: ""),
+                "§8: la cause va saneada — sólo el tipo de la excepción",
+            )
         }
 
     // --- §8: nada de secretos en logs ni en toString ---

@@ -3,6 +3,7 @@ package ai.hermes.mama.gateway
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -28,7 +29,9 @@ import kotlin.time.Duration.Companion.seconds
  *   uso (30 s). Si el servidor responde 401 → **un solo** re-login con las
  *   credenciales en memoria y un segundo intento; si también falla →
  *   [AuthException.SessionExpired] (§2.1.5). El re-login va bajo
- *   [reloginMutex]: llamadas concurrentes no provocan dos logins.
+ *   [reloginMutex] y antes de reemitir credenciales reintenta el ticket:
+ *   otro caller puede haber refrescado el jar mientras esperábamos el lock,
+ *   así dos `wsTicket` concurrentes provocan como mucho UN re-login.
  * - [wsUrl] construye la URL del socket: `https`→`wss`; `http`→`ws` sólo si el
  *   host es loopback/`10.0.2.2` o la sesión se creó con [allowCleartext]
  *   (flavor `dev`, §8). Una base `http://` a otro host se rechaza en el
@@ -183,14 +186,22 @@ class BasicAuthSession(
     }
 
     /**
-     * Bajo [reloginMutex] (llamadas concurrentes no provocan dos logins a la
-     * vez): UN re-login con las credenciales en memoria y UN segundo intento
-     * de ticket (§2.1.5). Cualquier segundo fallo → [AuthException.SessionExpired].
+     * Bajo [reloginMutex]. Primero reintenta el ticket SIN reemitir nada: un
+     * caller concurrente pudo haber hecho el re-login mientras esperábamos el
+     * lock (jar ya fresco) — con eso dos `wsTicket` paralelos provocan como
+     * mucho UN `password-login`. Si el ticket sigue en 401 → UN re-login con
+     * las credenciales en memoria y UN último intento; cualquier segundo
+     * fallo → [AuthException.SessionExpired] (§2.1.5).
      */
     private suspend fun ticketAfterRelogin(): WsTicket {
         val creds =
             credentials
                 ?: throw AuthException.SessionExpired("ws-ticket rejected and no credentials to re-login")
+        try {
+            return requestTicket()
+        } catch (ignored: AuthException.SessionExpired) {
+            // Las cookies siguen muertas: toca re-login.
+        }
         try {
             login(creds.username, creds.password)
             return requestTicket()
@@ -294,8 +305,13 @@ class BasicAuthSession(
         return try {
             json.decodeFromString(serializer, body)
         } catch (e: IllegalArgumentException) {
-            // kotlinx.serialization lanza IllegalArgumentException/SerializationException.
-            throw AuthException.MalformedResponse(e)
+            // §8 (mismo patrón que ResultDecodeException): el message de la
+            // SerializationException incrusta el fragmento del cuerpo — puede
+            // llevar el ticket vivo o email/display_name. La cause va saneada:
+            // sólo el tipo de la excepción, nunca su mensaje.
+            throw AuthException.MalformedResponse(
+                SerializationException(e::class.simpleName.toString()),
+            )
         }
     }
 
@@ -326,20 +342,29 @@ class BasicAuthSession(
         val JSON_MEDIA = MIME_JSON.toMediaType()
         val EMPTY_JSON_BODY = "{}".toRequestBody(JSON_MEDIA)
 
-        /** §8: cleartext sólo con host loopback/`10.0.2.2` (el flavor `dev` fuerza `allowCleartext`). */
-        fun isLoopbackOrEmulator(host: String): Boolean =
-            host == HOST_EMULATOR ||
+        /**
+         * §8: cleartext sólo con host loopback/`10.0.2.2` (el flavor `dev`
+         * fuerza `allowCleartext`). El 127/8 exige un IPv4 dotted-quad REAL —
+         * `127.evil.com` también "empieza por 127." y no es loopback.
+         */
+        fun isLoopbackOrEmulator(host: String): Boolean {
+            val quad = LOOPBACK_V4_REGEX.matchEntire(host)
+            return host == HOST_EMULATOR ||
                 host == HOST_LOCALHOST ||
                 host.endsWith(LOCALHOST_SUFFIX) ||
-                host.startsWith(LOOPBACK_V4_PREFIX) ||
+                (quad != null && quad.groupValues.drop(1).all { it.toInt() <= IPV4_OCTET_MAX }) ||
                 host == HOST_LOOPBACK_V6 ||
                 host == HOST_LOOPBACK_V6_BRACKETED ||
                 host == HOST_LOOPBACK_V6_FULL
+        }
+
+        /** 127.x.y.z con los 4 octetos presentes; el rango (≤255) se valida aparte. */
+        private val LOOPBACK_V4_REGEX = Regex("""^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+        private const val IPV4_OCTET_MAX = 255
 
         const val HOST_EMULATOR = "10.0.2.2"
         const val HOST_LOCALHOST = "localhost"
         const val LOCALHOST_SUFFIX = ".localhost"
-        const val LOOPBACK_V4_PREFIX = "127."
         const val HOST_LOOPBACK_V6 = "::1"
         const val HOST_LOOPBACK_V6_BRACKETED = "[::1]"
         const val HOST_LOOPBACK_V6_FULL = "0:0:0:0:0:0:0:1"
