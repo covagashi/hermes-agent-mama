@@ -145,7 +145,15 @@ internal class TurnRunner(
     // --- controlador de navegador (§2.6) ---
 
     private suspend fun runBrowserCommand(step: ScriptStep.BrowserCommand) {
-        val controller = session.controllers.values.firstOrNull()
+        // En el sistema real el `tool.start` browser_* y el dispatch del broker
+        // no ocurren a la vez: entre medias hay latencia de modelo/aprobación, y
+        // el router real hasta cae al backend legacy si el lane aún no está
+        // registrado (browser_extension_router.py). El guion comprime esa
+        // latencia a cero mientras el cliente (F3) auto-registra al VER el
+        // tool.start — sin margen, el primer comando siempre perdería la
+        // carrera. Ventana de gracia: sale en cuanto aterriza el registro y, si
+        // nunca llega, conserva el fail-fast de «sin controlador».
+        val controller = awaitController()
         if (controller == null) {
             emitEvent(
                 "error",
@@ -206,6 +214,25 @@ internal class TurnRunner(
                 throw TurnAbort("timeout esperando browser.controller.result ($commandId)")
             }
         lastResult = result["result"] ?: result
+    }
+
+    /**
+     * Espera acotada al primer controlador registrado de la sesión. Sondeo de
+     * [CONTROLLER_POLL_MS] hasta [CONTROLLER_WAIT_MS]: en el caso feliz el
+     * `browser.controller.register` del cliente aterriza en unos pocos sondeos
+     * (WS localhost) y el paso sigue al instante; agotada la ventana devuelve
+     * `null` y el llamador emite el error «sin controlador» como siempre.
+     */
+    private suspend fun awaitController(): ControllerRegistration? {
+        var remaining = CONTROLLER_WAIT_MS
+        while (remaining > 0) {
+            session.controllers.values
+                .firstOrNull()
+                ?.let { return it }
+            delay(CONTROLLER_POLL_MS)
+            remaining -= CONTROLLER_POLL_MS
+        }
+        return session.controllers.values.firstOrNull()
     }
 
     private suspend fun runBrowserCancel(step: ScriptStep.BrowserCancel) {
@@ -448,5 +475,14 @@ internal class TurnRunner(
         /** El string entero es UN token `{{last_result.campo…}}` (sin texto alrededor). */
         val TOKEN_PATH_REGEX = Regex("""\{\{last_result\.[A-Za-z0-9_.-]+\}\}""")
         const val PREVIEW_CHARS = 80
+
+        /**
+         * Ventana de gracia para que el `browser.controller.register` del
+         * cliente aterrice tras un `tool.start` browser_* (ver
+         * [awaitController]). Holgada frente a un RTT de WS localhost; sólo se
+         * consume entera cuando ningún controlador se registra jamás.
+         */
+        private const val CONTROLLER_WAIT_MS = 5_000L
+        private const val CONTROLLER_POLL_MS = 25L
     }
 }

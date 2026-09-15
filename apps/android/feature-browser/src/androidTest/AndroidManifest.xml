@@ -11,5 +11,11 @@
         <activity
             android:name="ai.hermes.mama.feature.browser.ControllerTestActivity"
             android:exported="false" />
+        <!-- Host de createAndroidComposeRule<ComponentActivity> en el test E2E
+             de F4; sin declararla el intent MAIN/LAUNCHER no resuelve y el
+             proceso de test muere. -->
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true" />
     </application>
 </manifest>
