@@ -118,11 +118,8 @@ class ClarifyFlowInstrumentedTest {
             composeRule.waitUntil(WAIT_MS) { gateway.answeredRequests.isNotEmpty() }
             val answered = gateway.answeredRequests.single()
             assertEquals("clarify", answered.method)
-            val answers =
-                answered.result!!
-                    .jsonObject
-                    .getValue("answers")
-                    .jsonObject
+            val result = checkNotNull(answered.result)
+            val answers = result.jsonObject.getValue("answers").jsonObject
             assertEquals("azul", answers.getValue("color").jsonPrimitive.content)
             // multi_select viaja como string JSON de array (§2.5).
             assertEquals(

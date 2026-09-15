@@ -8,6 +8,9 @@ import ai.hermes.mama.feature.voice.SpeechErrorKind
 import ai.hermes.mama.feature.voice.SpeechInput
 import ai.hermes.mama.feature.voice.SpeechState
 import ai.hermes.mama.feature.voice.humanMessage
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +20,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Mic
@@ -47,9 +52,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import ai.hermes.mama.feature.voice.R as VoiceR
 
 /**
  * Las entradas de la tarjeta de pregunta (C7): lo que la pregunta pide
@@ -255,8 +267,10 @@ private fun FreeTextRow(
     val submit = {
         val answer = text.trim()
         if (answer.isNotEmpty()) {
+            // No se limpia el campo: si el envío falla (SendFailed) la
+            // respuesta queda para reintentar; si va bien, la tarjeta se
+            // oculta sola (y la siguiente pregunta reinicia el rememberSaveable).
             onAnswer(answer)
-            text = ""
         }
     }
 
@@ -276,22 +290,126 @@ private fun FreeTextRow(
                 onSubmit = { submit() },
                 modifier = Modifier.weight(1f),
             )
-            MicOrSendButton(
+            MicWithPermission(
                 listening = isListening,
                 hasText = text.isNotBlank(),
                 speech = speech,
-                onMicClick = {
-                    if (isListening) {
-                        speech?.stopListening()
-                    } else {
-                        voiceError = null
-                        speech?.startListening()
-                    }
-                },
+                onVoiceEvent = { voiceError = it },
                 onSend = { submit() },
             )
         }
         voiceError?.let { kind -> VoiceErrorHint(kind) }
+    }
+}
+
+/**
+ * 🎤/➤ + la petición de RECORD_AUDIO. El permiso se pide desde esta
+ * superficie (la dueña del micro): primero la explicación humana de D1 y
+ * luego el request del sistema — concedido arranca el dictado, negado deja
+ * el hint "puedes escribir". En una instalación limpia el micro ya no es un
+ * callejón sin salida.
+ */
+@Composable
+private fun MicWithPermission(
+    listening: Boolean,
+    hasText: Boolean,
+    speech: SpeechInput?,
+    onVoiceEvent: (SpeechErrorKind?) -> Unit,
+    onSend: () -> Unit,
+) {
+    var rationaleVisible by remember { mutableStateOf(false) }
+    val micPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                speech?.startListening()
+            } else {
+                onVoiceEvent(SpeechErrorKind.PermissionDenied)
+            }
+        }
+    MicOrSendButton(
+        listening = listening,
+        hasText = hasText,
+        speech = speech,
+        onMicClick = {
+            if (listening) {
+                speech?.stopListening()
+            } else if (speech != null) {
+                onVoiceEvent(null)
+                if (speech.hasAudioPermission()) {
+                    speech.startListening()
+                } else {
+                    rationaleVisible = true
+                }
+            }
+        },
+        onSend = onSend,
+    )
+    if (rationaleVisible) {
+        MicPermissionDialog(
+            onAllow = {
+                rationaleVisible = false
+                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            onNotNow = { rationaleVisible = false },
+        )
+    }
+}
+
+/**
+ * Explicación humana previa al request de RECORD_AUDIO (D1: permiso "con
+ * explicación"): la usuaria decide sabiendo para qué sirve antes de que el
+ * sistema pregunte. Misma familia visual que los diálogos de C3.
+ */
+@Composable
+private fun MicPermissionDialog(
+    onAllow: () -> Unit,
+    onNotNow: () -> Unit,
+) {
+    val title = stringResource(VoiceR.string.voice_permission_rationale_title)
+    Dialog(
+        onDismissRequest = onNotNow,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .semantics {
+                        paneTitle = title
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            shape = RoundedCornerShape(MamaDimens.SheetCorner),
+            color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(text = title, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = stringResource(VoiceR.string.voice_permission_rationale),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                BigButton(
+                    text = stringResource(VoiceR.string.voice_permission_allow),
+                    onClick = onAllow,
+                    variant = MamaButtonVariant.Primary,
+                    icon = Icons.Outlined.Mic,
+                    iconContentDescription = null,
+                )
+                BigButton(
+                    text = stringResource(VoiceR.string.voice_permission_not_now),
+                    onClick = onNotNow,
+                    variant = MamaButtonVariant.Neutral,
+                )
+            }
+        }
     }
 }
 

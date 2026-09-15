@@ -68,6 +68,8 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)
     implementation(libs.compose.material.icons.extended)
+    // C7: el 🎤 de la tarjeta lanza el request de RECORD_AUDIO (rememberLauncherForActivityResult).
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)

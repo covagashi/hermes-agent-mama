@@ -245,12 +245,17 @@ class ClarifyController(
      * así que el discriminante es el canal — igual que en ApprovalController).
      */
     private suspend fun sendFinal(entry: Entry) {
+        // Snapshot bajo el mutex: un mergeLocked concurrente (re-entrega con
+        // answers bloqueadas por el servidor) iteraría el mismo LinkedHashMap
+        // a mitad del encode → ConcurrentModificationException y la tarjeta
+        // quedaría soft-bloqueada (responding=true sin error visible).
+        val snapshot = mutex.withLock { LinkedHashMap(entry.answers) }
         val sent =
             entry.live?.let { live ->
                 if (entry.batch) {
-                    live.answerAll(entry.answers)
+                    live.answerAll(snapshot)
                 } else {
-                    live.answer(entry.answers.values.last())
+                    live.answer(snapshot.values.last())
                 }
             } ?: false
         mutex.withLock {
@@ -279,9 +284,10 @@ class ClarifyController(
     /** Reenvía el result ya registrado a una re-entrega (sin tocar la UI). */
     private fun resendFinal(entry: Entry) {
         scope.launch {
+            val snapshot = mutex.withLock { LinkedHashMap(entry.answers) }
             val sent =
                 entry.live?.let { live ->
-                    if (entry.batch) live.answerAll(entry.answers) else live.answer(entry.answers.values.last())
+                    if (entry.batch) live.answerAll(snapshot) else live.answer(snapshot.values.last())
                 } ?: false
             if (!sent) {
                 warn("re-respuesta de clarify re-entregada no salió")
