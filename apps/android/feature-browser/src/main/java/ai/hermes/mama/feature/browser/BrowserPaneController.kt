@@ -53,6 +53,12 @@ class BrowserPaneController(
     private val scope: CoroutineScope,
     private val autoOpenNoticeMs: Long = AUTO_OPEN_NOTICE_MS,
     private val logger: (String) -> Unit = {},
+    /**
+     * Gestor de descargas de la sesión (§5/G1); `null` = WebView sin
+     * `DownloadListener` funcional (tests que no lo ejercitan). La pantalla lo
+     * enchufa al `downloadHandler` del [AndroidWebViewDriver].
+     */
+    val downloads: BrowserDownloadManager? = null,
 ) {
     private val started = AtomicBoolean(false)
 
@@ -70,12 +76,19 @@ class BrowserPaneController(
     private var noticeJob: Job? = null
 
     /**
-     * Estado único para Compose (§5/F4): fase del registro + último progreso +
-     * comando en curso + aviso de auto-apertura.
+     * Estado único para Compose (§5/F4 + §5/G1): fase del registro + último
+     * progreso + comando en curso + aviso de auto-apertura + descarga pendiente
+     * de mostrar en la hoja inferior.
      */
     val uiState: StateFlow<BrowserPaneState> =
-        combine(session.state, executor.busy, progress, noticeVisible, ::paneState)
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), BrowserPaneState())
+        combine(
+            session.state,
+            executor.busy,
+            progress,
+            noticeVisible,
+            downloads?.completed ?: EMPTY_DOWNLOAD,
+            ::paneState,
+        ).stateIn(scope, SharingStarted.WhileSubscribed(5_000), BrowserPaneState())
 
     /**
      * Abrir la pantalla: pide el controlador para [sessionId] (idempotente —
@@ -143,6 +156,28 @@ class BrowserPaneController(
         }
     }
 
+    // ------------------------------------------------- hoja de descarga (G1) --
+
+    /** Cierra la hoja inferior (scrim, atrás o «ya la vi»). */
+    fun dismissDownload() {
+        downloads?.dismissSheet()
+    }
+
+    /** «Abrir» — `ACTION_VIEW` al `content://` de MediaStore. */
+    fun openDownload() {
+        downloads?.openCurrent()
+    }
+
+    /** «Compartir» — `ACTION_SEND` con chooser. */
+    fun shareDownload() {
+        downloads?.shareCurrent()
+    }
+
+    /** «Enviar a Hermes» — cableado ya; el botón está deshabilitado hasta G2. */
+    fun sendDownloadToHermes() {
+        downloads?.sendCurrentToHermes()
+    }
+
     // ------------------------------------------------------------- interno --
 
     /**
@@ -199,16 +234,21 @@ class BrowserPaneController(
     }
 }
 
-/** Constructor posicional para el `combine` de 4 flows (nombres en el data class). */
+/** Constructor posicional para el `combine` de 5 flows (nombres en el data class). */
 private fun paneState(
     state: ControllerState,
     busy: Boolean,
     progressMessage: String?,
     notice: Boolean,
+    download: DownloadedDoc?,
 ): BrowserPaneState =
     BrowserPaneState(
         phase = browserPhaseFor(state),
         progressMessage = progressMessage,
         commandInFlight = busy,
         showAutoOpenNotice = notice,
+        download = download,
     )
+
+/** `completed` del gestor cuando no hay gestor: siempre `null` (sin hoja). */
+private val EMPTY_DOWNLOAD = MutableStateFlow<DownloadedDoc?>(null)

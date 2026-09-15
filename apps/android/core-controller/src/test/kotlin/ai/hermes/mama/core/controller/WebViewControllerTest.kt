@@ -14,6 +14,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.concurrent.atomic.AtomicInteger
@@ -581,6 +582,69 @@ class WebViewControllerTest {
             val (controller, _) = newController()
             val outcome = controller.execute(BrowserCommand.Click("c1", "@e2"))
             assertTrue(outcome.ok)
+        }
+
+    // ------------------------------------------- notas en el resultado (G1) --
+
+    @Test
+    fun `queueResultNote pega la nota al siguiente resultado como notes`() =
+        runTest {
+            val (controller, _) = newController()
+            controller.queueResultNote(
+                "Downloaded file saved on the user's phone: factura.pdf (application/pdf, 4 KB)",
+            )
+            val outcome = controller.execute(BrowserCommand.Noop("c1"))
+            assertTrue(outcome.ok)
+            val notes = parse(outcome.resultJson)["notes"]?.jsonArray
+            assertEquals(
+                "Downloaded file saved on the user's phone: factura.pdf (application/pdf, 4 KB)",
+                notes?.single()?.jsonPrimitive?.contentOrNull,
+            )
+            // El siguiente resultado ya no la repite: la cola se drena una vez.
+            val second = controller.execute(BrowserCommand.Noop("c2"))
+            assertEquals(null, parse(second.resultJson)["notes"])
+        }
+
+    @Test
+    fun `varias notas viajan juntas y tambien en resultados de fallo`() =
+        runTest {
+            val (controller, _) = newController()
+            controller.queueResultNote("nota uno")
+            controller.queueResultNote("nota dos")
+            val outcome =
+                controller.execute(
+                    BrowserCommand.Invalid("c1", "browser_desconocida", "acción desconocida"),
+                )
+            assertFalse(outcome.ok)
+            val notes =
+                parse(outcome.resultJson)["notes"]
+                    ?.jsonArray
+                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            assertEquals(listOf("nota uno", "nota dos"), notes)
+        }
+
+    @Test
+    fun `sin notas el resultado no lleva el campo`() =
+        runTest {
+            val (controller, _) = newController()
+            val outcome = controller.execute(BrowserCommand.Noop("c1"))
+            assertEquals(null, parse(outcome.resultJson)["notes"])
+        }
+
+    @Test
+    fun `la nota se acota como cualquier motivo humano`() =
+        runTest {
+            val (controller, _) = newController()
+            controller.queueResultNote("x".repeat(1_000) + "\nsalto")
+            val outcome = controller.execute(BrowserCommand.Noop("c1"))
+            val note =
+                parse(outcome.resultJson)["notes"]
+                    ?.jsonArray
+                    ?.single()
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+            assertEquals(240, note?.length)
+            assertFalse(note.orEmpty().contains("\n"), "los saltos de línea se neutralizan")
         }
 
     // ------------------------------------------------------------ helpers ----

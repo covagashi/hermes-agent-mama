@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Textos de las descargas del WebView (§5/G1, mockup Documento.dc.html).
+  El copy visible lo fija el roadmap — español base, frases cortas y claras.
+-->
+<resources>
+    <!-- paneTitle de la hoja inferior: TalkBack la anuncia al aparecer. -->
+    <string name="download_sheet_cd">Documento descargado</string>
+
+    <!-- Scrim de la hoja: tocarlo la cierra — etiqueta accesible de «Cerrar». -->
+    <string name="download_dismiss_cd">Cerrar</string>
+
+    <!-- Subtítulo de la hoja: «Guardado en Descargas · 128 KB». -->
+    <string name="download_saved_detail">Guardado en Descargas · %1$s</string>
+
+    <!-- Acciones de la hoja (el texto visible ya es el nombre accesible). -->
+    <string name="download_open">Abrir</string>
+    <string name="download_share">Compartir</string>
+    <string name="download_send_to_hermes">Enviar a Hermes</string>
+
+    <!-- Pie de la hoja (mockup): para qué sirve «Enviar a Hermes». -->
+    <string name="download_send_hint">«Enviar a Hermes» sirve, por ejemplo, para que lo mande por correo.</string>
+
+    <!-- ACTION_VIEW sin app que lo resuelva → Toast; la hoja sigue abierta. -->
+    <string name="download_open_failed">No hay ninguna app para abrir este archivo</string>
+
+    <!-- Título del chooser de ACTION_SEND. -->
+    <string name="download_share_chooser">Compartir documento</string>
+
+    <!-- Canal + notificación del sistema al terminar la descarga (§5/G1). -->
+    <string name="download_notification_channel">Descargas</string>
+    <string name="download_notification_title">Descarga terminada</string>
+    <string name="download_notification_text">Se ha guardado %1$s en Descargas</string>
+</resources>

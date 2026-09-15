@@ -61,6 +61,10 @@ dependencies {
 
     implementation(libs.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // G1: NotificationCompat/NotificationChannelCompat para el aviso de sistema.
+    implementation(libs.androidx.core.ktx)
+    // G1: re-descarga del DownloadListener con cookies/UA del WebView.
+    implementation(libs.okhttp)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose.ui)

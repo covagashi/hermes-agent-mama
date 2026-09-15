@@ -76,6 +76,12 @@ fun BrowserPane(
 ) {
     val state by controller.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(controller, autoOpened) { controller.start(autoOpenNotice = autoOpened) }
+    // §5/G1: el DownloadListener del WebView delega en el gestor de la sesión.
+    // No se limpia en onDispose: driver y descargas en curso sobreviven a la
+    // pantalla («Volver al chat» no cancela una descarga).
+    LaunchedEffect(driver, controller.downloads) {
+        controller.downloads?.let { driver.downloadHandler = it::onDownloadStart }
+    }
     DisposableEffect(controller) {
         onDispose {
             // Sólo los colectores: el controlador sigue registrado (§5/F4).
@@ -87,6 +93,10 @@ fun BrowserPane(
         onStop = controller::stopHermes,
         onBackToChat = onBackToChat,
         modifier = modifier,
+        onDownloadOpen = controller::openDownload,
+        onDownloadShare = controller::shareDownload,
+        onDownloadSendToHermes = controller::sendDownloadToHermes,
+        onDownloadDismiss = controller::dismissDownload,
     ) {
         BrowserWebView(driver = driver, modifier = Modifier.fillMaxSize())
     }
@@ -106,35 +116,52 @@ fun BrowserScreen(
     onStop: () -> Unit,
     onBackToChat: () -> Unit,
     modifier: Modifier = Modifier,
+    onDownloadOpen: () -> Unit = {},
+    onDownloadShare: () -> Unit = {},
+    onDownloadSendToHermes: () -> Unit = {},
+    onDownloadDismiss: () -> Unit = {},
     webContent: @Composable () -> Unit,
 ) {
     val title = stringResource(R.string.browser_screen_title)
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .semantics { paneTitle = title },
-    ) {
-        if (state.showAutoOpenNotice) {
-            TopBanner(
-                text = stringResource(R.string.browser_auto_open_notice),
-                icon = Icons.Outlined.Public,
-            )
-        }
-        BrowserTopBar(state = state, onStop = onStop)
-        // El velo cubre SÓLO el área web: la barra superior (Parar) y la
-        // inferior (Volver al chat) siguen alcanzables con un comando en curso.
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            webContent()
-            if (state.commandInFlight) {
-                BrowserVeil(
-                    detail = state.progressMessage,
-                    modifier = Modifier.fillMaxSize(),
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .semantics { paneTitle = title },
+        ) {
+            if (state.showAutoOpenNotice) {
+                TopBanner(
+                    text = stringResource(R.string.browser_auto_open_notice),
+                    icon = Icons.Outlined.Public,
                 )
             }
+            BrowserTopBar(state = state, onStop = onStop)
+            // El velo cubre SÓLO el área web: la barra superior (Parar) y la
+            // inferior (Volver al chat) siguen alcanzables con un comando en curso.
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                webContent()
+                if (state.commandInFlight) {
+                    BrowserVeil(
+                        detail = state.progressMessage,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            BrowserBottomBar(onBackToChat = onBackToChat)
         }
-        BrowserBottomBar(onBackToChat = onBackToChat)
+        // §5/G1: hoja «📄 nombre — Abrir · Compartir · Enviar a Hermes» al
+        // terminar una descarga — por encima de todo, también del velo.
+        state.download?.let { doc ->
+            DownloadSheetOverlay(
+                doc = doc,
+                onOpen = onDownloadOpen,
+                onShare = onDownloadShare,
+                onSendToHermes = onDownloadSendToHermes,
+                onDismiss = onDownloadDismiss,
+            )
+        }
     }
 }
 

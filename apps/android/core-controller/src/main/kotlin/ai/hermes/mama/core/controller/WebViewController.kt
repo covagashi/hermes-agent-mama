@@ -15,15 +15,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Ejecuta [BrowserCommand] sobre un [WebViewDriver] (ROADMAP §5/F2).
@@ -71,6 +76,16 @@ public class WebViewController(
     /** Los comandos se ejecutan de uno en uno: el WebView es un recurso único. */
     private val execMutex = Mutex()
 
+    /**
+     * Notas en inglés (para el modelo) que se pegan al PRÓXIMO resultado §2.6
+     * como campo `"notes":[…]` (§5/G1): el reporter de descargas las encola
+     * cuando una descarga del WebView termina con un comando aún en vuelo, así
+     * la nota viaja en `browser.controller.result` en vez de perderse.
+     * ConcurrentLinkedQueue: [queueResultNote] se llama desde el hilo del
+     * `DownloadListener` del WebView.
+     */
+    private val pendingResultNotes = ConcurrentLinkedQueue<String>()
+
     private val mutableBusy = MutableStateFlow(false)
 
     /**
@@ -104,12 +119,12 @@ public class WebViewController(
                         }
                     } catch (e: CancellationException) {
                         // La cancelación también es un resultado §2.6: se entrega y se propaga.
-                        outcome.complete(BrowserCommandOutcome.failure("Command cancelled"))
+                        outcome.complete(withPendingNotes(BrowserCommandOutcome.failure("Command cancelled")))
                         throw e
                     } catch (e: Exception) {
                         BrowserCommandOutcome.failure(humanError(e))
                     }
-                outcome.complete(result)
+                outcome.complete(withPendingNotes(result))
             }
         if (inflight.putIfAbsent(command.commandId, job) != null) {
             job.cancel()
@@ -129,7 +144,7 @@ public class WebViewController(
                         cause is Exception -> humanError(cause)
                         else -> cause.message?.take(MAX_ERROR_CHARS) ?: "Command failed"
                     }
-                outcome.complete(BrowserCommandOutcome.failure(reason))
+                outcome.complete(withPendingNotes(BrowserCommandOutcome.failure(reason)))
             }
         }
         job.start()
@@ -148,6 +163,32 @@ public class WebViewController(
                 job.cancel()
             }
         }
+    }
+
+    /**
+     * Encola una nota (texto en inglés para el modelo) que viajará en el
+     * próximo resultado §2.6 como `"notes":[…]` — ver [pendingResultNotes].
+     * Llamable desde cualquier hilo; las notas se acotan a [MAX_ERROR_CHARS].
+     */
+    public fun queueResultNote(note: String) {
+        pendingResultNotes += note.replace('\n', ' ').take(MAX_ERROR_CHARS)
+    }
+
+    /** Pega las notas pendientes (si las hay) a [outcome] sin tocar `success`/`error`. */
+    private fun withPendingNotes(outcome: BrowserCommandOutcome): BrowserCommandOutcome {
+        val notes = generateSequence { pendingResultNotes.poll() }.toList()
+        val merged =
+            notes.takeIf { it.isNotEmpty() }?.let {
+                runCatching {
+                    buildJsonObject {
+                        Json.parseToJsonElement(outcome.resultJson).jsonObject.forEach { (k, v) ->
+                            put(k, v)
+                        }
+                        putJsonArray("notes") { notes.forEach { n -> add(n) } }
+                    }.toString()
+                }.getOrNull()
+            }
+        return merged?.let { outcome.copy(resultJson = it) } ?: outcome
     }
 
     /**

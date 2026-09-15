@@ -19,11 +19,17 @@ import kotlinx.serialization.json.JsonPrimitive
 suspend fun GatewayClient.submitPrompt(params: PromptSubmitParams): PromptSubmitResult =
     rpc(RpcMethods.PROMPT_SUBMIT, params, PromptSubmitParams.serializer(), PromptSubmitResult.serializer())
 
-/** `prompt.submit` con la forma de la app: `{session_id, text, surface:"android", voice_context?}` (§2.3). */
+/**
+ * `prompt.submit` con la forma de la app: `{session_id, text, surface:"android",
+ * voice_context?, display_kind?}` (§2.3). [displayKind] marca mensajes que no son
+ * un prompt de la usuaria — p. ej. `"system"` para el aviso «se ha guardado X»
+ * tras una descarga del WebView (§5/G1).
+ */
 suspend fun GatewayClient.submitPrompt(
     sessionId: String,
     text: String,
     voiceContext: String? = null,
+    displayKind: String? = null,
 ): PromptSubmitResult =
     submitPrompt(
         PromptSubmitParams(
@@ -31,6 +37,7 @@ suspend fun GatewayClient.submitPrompt(
             text = JsonPrimitive(text),
             surface = GatewayClient.APP_SOURCE,
             voiceContext = voiceContext,
+            displayKind = displayKind,
         ),
     )
 

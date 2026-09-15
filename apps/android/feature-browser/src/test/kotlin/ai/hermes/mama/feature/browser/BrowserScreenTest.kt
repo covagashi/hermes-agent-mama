@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
@@ -169,6 +172,71 @@ class BrowserScreenTest {
         composeRule.onNodeWithText(backToChat).assertIsDisplayed()
     }
 
+    // --------------------------------------------- hoja de descarga (G1) -----
+
+    @Test
+    fun `la hoja de descarga muestra nombre, detalle y las tres acciones`() {
+        val state =
+            mutableStateOf(
+                BrowserPaneState(phase = BrowserPhase.Browsing, download = doc),
+            )
+        setScreen(state)
+
+        composeRule.onNodeWithText("factura-mama.pdf").assertIsDisplayed()
+        composeRule.onNodeWithText("Guardado en Descargas · 4 KB").assertIsDisplayed()
+        composeRule.onNodeWithText(open).assertIsDisplayed().assertHeightIsAtLeast(MIN_TOUCH_DP.dp)
+        composeRule.onNodeWithText(share).assertIsDisplayed().assertHeightIsAtLeast(MIN_TOUCH_DP.dp)
+        composeRule.onNodeWithText(sendToHermes).assertIsDisplayed()
+        // G1: «Enviar a Hermes» llega en G2 — visible pero deshabilitado.
+        composeRule.onNodeWithText(sendToHermes).assertIsNotEnabled()
+        composeRule.onNodeWithText(sendHint, substring = true).assertIsDisplayed()
+
+        state.value = state.value.copy(download = null)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("factura-mama.pdf").assertDoesNotExist()
+    }
+
+    @Test
+    fun `las acciones de la hoja llaman a sus callbacks`() {
+        var opened = false
+        var shared = false
+        setScreen(
+            mutableStateOf(BrowserPaneState(phase = BrowserPhase.Browsing, download = doc)),
+            onDownloadOpen = { opened = true },
+            onDownloadShare = { shared = true },
+        )
+
+        composeRule.onNodeWithText(open).performClick()
+        composeRule.onNodeWithText(share).performClick()
+        assertTrue(opened, "Abrir debe llegar al callback")
+        assertTrue(shared, "Compartir debe llegar al callback")
+    }
+
+    @Test
+    fun `el scrim lleva Cerrar accesible y descarta la hoja`() {
+        var dismissed = false
+        setScreen(
+            mutableStateOf(BrowserPaneState(phase = BrowserPhase.Browsing, download = doc)),
+            onDownloadDismiss = { dismissed = true },
+        )
+
+        // OnClick semántico — el gesto de TalkBack. (Un performClick por
+        // posición caería en el CENTRO del nodo… tapado por la propia hoja.)
+        composeRule
+            .onNodeWithContentDescription(dismissCd)
+            .assertHasClickAction()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        assertTrue(dismissed, "el scrim debe descartar la hoja")
+    }
+
+    @Test
+    fun `accesibilidad con la hoja de descarga abierta`() {
+        setScreen(
+            mutableStateOf(BrowserPaneState(phase = BrowserPhase.Browsing, download = doc)),
+        )
+        runEspressoA11yCheck()
+    }
+
     @Test
     fun `accesibilidad en navegando con velo y en error`() {
         val state =
@@ -197,6 +265,10 @@ class BrowserScreenTest {
         state: androidx.compose.runtime.MutableState<BrowserPaneState>,
         onStop: () -> Unit = {},
         onBackToChat: () -> Unit = {},
+        onDownloadOpen: () -> Unit = {},
+        onDownloadShare: () -> Unit = {},
+        onDownloadSendToHermes: () -> Unit = {},
+        onDownloadDismiss: () -> Unit = {},
     ) {
         composeRule.setContent {
             MamaTheme {
@@ -204,6 +276,10 @@ class BrowserScreenTest {
                     state = state.value,
                     onStop = onStop,
                     onBackToChat = onBackToChat,
+                    onDownloadOpen = onDownloadOpen,
+                    onDownloadShare = onDownloadShare,
+                    onDownloadSendToHermes = onDownloadSendToHermes,
+                    onDownloadDismiss = onDownloadDismiss,
                 ) {
                     // En JVM el WebView no dibuja: un panel liso hace de página.
                     Box(
@@ -234,6 +310,20 @@ class BrowserScreenTest {
         private val serverNotEnabled: String get() = string(R.string.browser_server_not_enabled)
         private val registrationFailed: String get() = string(R.string.browser_registration_failed)
         private val autoOpenNotice: String get() = string(R.string.browser_auto_open_notice)
+        private val open: String get() = string(R.string.download_open)
+        private val share: String get() = string(R.string.download_share)
+        private val sendToHermes: String get() = string(R.string.download_send_to_hermes)
+        private val sendHint: String get() = string(R.string.download_send_hint)
+        private val dismissCd: String get() = string(R.string.download_dismiss_cd)
+
+        /** Documento de ejemplo para la hoja (ficticio, §7.2). */
+        private val doc =
+            DownloadedDoc(
+                fileName = "factura-mama.pdf",
+                mimeType = "application/pdf",
+                sizeBytes = 4_096,
+                contentUri = "content://media/external/downloads/7",
+            )
 
         @JvmStatic
         @BeforeClass

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- G1: la notificación de descarga se ejercita de verdad en los tests. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- usesCleartextTraffic: MockWebServer sirve http://localhost en los tests (F2). -->
     <application android:usesCleartextTraffic="true">
         <!-- Activity mínima que hospeda el WebView bajo test (F1). -->

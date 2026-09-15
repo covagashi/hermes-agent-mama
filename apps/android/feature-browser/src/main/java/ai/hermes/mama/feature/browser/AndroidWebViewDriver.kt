@@ -64,6 +64,16 @@ public class AndroidWebViewDriver(
         }
     }
 
+    /**
+     * §5/G1: gestor al que el `DownloadListener` entrega cada
+     * [WebViewDownloadRequest]. Lo asigna la pantalla Navegador con el
+     * [BrowserDownloadManager] de la sesión; `null` = descargas ignoradas.
+     * Vive a nivel de sesión (como el WebView): no se limpia al salir de la
+     * pantalla — una descarga puede terminar con ella desmontada.
+     */
+    @Volatile
+    public var downloadHandler: ((WebViewDownloadRequest) -> Unit)? = null
+
     /** La vista real: la pantalla Navegador la monta como contenido. */
     public val webView: WebView =
         WebView(context)
@@ -85,6 +95,21 @@ public class AndroidWebViewDriver(
                 // §2.6 `pending_dialogs`: un alert/confirm/prompt JS no puede
                 // quedar colgando el hilo del WebView (y menos un modal nativo).
                 webChromeClient = AutoDismissJsDialogs()
+                // §5/G1: las respuestas «descargables» (attachment, PDF, …) no
+                // navegan — el gestor de descargas las re-descarga a
+                // `Downloads/Hermes/`. El handler vive a nivel de sesión: lo
+                // enchufa la pantalla con el BrowserDownloadManager vigente.
+                setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+                    downloadHandler?.invoke(
+                        WebViewDownloadRequest(
+                            url = url.orEmpty(),
+                            userAgent = userAgent,
+                            contentDisposition = contentDisposition,
+                            mimeType = mimeType,
+                            contentLength = contentLength,
+                        ),
+                    )
+                }
             }.also { view ->
                 // §5/F4: cookies persistentes (almacén privado de la app) y
                 // rechazo de cookies de terceros (§8: menos tracking).
