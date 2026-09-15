@@ -56,7 +56,7 @@ class ChatsScreenInstrumentedTest {
     }
 
     @Test
-    fun `crear un chat navega via la senal de navegacion`() {
+    fun crear_un_chat_navega_via_la_senal_de_navegacion() {
         setChatsContent()
 
         composeRule.onNodeWithText(string(R.string.chats_new_chat)).performClick()
@@ -74,7 +74,7 @@ class ChatsScreenInstrumentedTest {
     }
 
     @Test
-    fun `borrar un chat pide confirmacion antes de tocar el servidor`() {
+    fun borrar_un_chat_pide_confirmacion_antes_de_tocar_el_servidor() {
         gateway.onListSessions = { listResult() }
         setChatsContent()
         awaitChat(FACTURA_TITLE)
@@ -97,7 +97,7 @@ class ChatsScreenInstrumentedTest {
     }
 
     @Test
-    fun `conservar en el dialogo de borrado no toca el servidor`() {
+    fun conservar_en_el_dialogo_de_borrado_no_toca_el_servidor() {
         gateway.onListSessions = { listResult() }
         setChatsContent()
         awaitChat(FACTURA_TITLE)
@@ -117,7 +117,7 @@ class ChatsScreenInstrumentedTest {
     }
 
     @Test
-    fun `sin red la lista cacheada sigue visible y sale la franja`() {
+    fun sin_red_la_lista_cacheada_sigue_visible_y_sale_la_franja() {
         gateway.onListSessions = { listResult() }
         setChatsContent()
         awaitChat(FACTURA_TITLE)
@@ -136,7 +136,7 @@ class ChatsScreenInstrumentedTest {
     }
 
     @Test
-    fun `tap en una fila navega via la senal de navegacion`() {
+    fun tap_en_una_fila_navega_via_la_senal_de_navegacion() {
         gateway.onListSessions = { listResult() }
         setChatsContent()
         awaitChat(FACTURA_TITLE)
