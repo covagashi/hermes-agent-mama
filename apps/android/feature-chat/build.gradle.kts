@@ -123,6 +123,10 @@ dependencies {
     // WebSocketTransport expone tipos okhttp en su firma (CookieJar/OkHttpClient).
     androidTestImplementation(libs.okhttp)
     androidTestImplementation(project(":testing"))
+    // §7.1: AccessibilityChecks también en el instrumentado (espresso → ATF).
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.espresso.accessibility)
+    androidTestImplementation(libs.a11y.test.framework)
 }
 
 tasks.withType<Test>().configureEach {

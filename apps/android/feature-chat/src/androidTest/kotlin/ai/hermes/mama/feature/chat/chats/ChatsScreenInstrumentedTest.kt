@@ -20,11 +20,18 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.accessibility.AccessibilityChecks
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.google.android.apps.common.testing.accessibility.framework.AccessibilityCheckResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,6 +78,7 @@ class ChatsScreenInstrumentedTest {
             "session.create salió con el título del día",
             gateway.calls.any { it.startsWith("create:Chat de") },
         )
+        runEspressoA11yCheck()
     }
 
     @Test
@@ -94,6 +102,7 @@ class ChatsScreenInstrumentedTest {
             gateway.calls.any { it == "delete:demo_factura" }
         }
         composeRule.waitUntil(timeoutMillis = WAIT_MS) { !isChatShown(FACTURA_TITLE) }
+        runEspressoA11yCheck()
     }
 
     @Test
@@ -114,6 +123,7 @@ class ChatsScreenInstrumentedTest {
             gateway.calls.none { it.startsWith("delete:") },
         )
         composeRule.onNodeWithText(FACTURA_TITLE).assertIsDisplayed()
+        runEspressoA11yCheck()
     }
 
     @Test
@@ -133,6 +143,7 @@ class ChatsScreenInstrumentedTest {
         // La caché sigue pintada: los chats no desaparecen con la conexión.
         composeRule.onNodeWithText(FACTURA_TITLE).assertIsDisplayed()
         composeRule.onNodeWithText("Correo").assertIsDisplayed()
+        runEspressoA11yCheck()
     }
 
     @Test
@@ -146,6 +157,7 @@ class ChatsScreenInstrumentedTest {
         composeRule.waitUntil(timeoutMillis = WAIT_MS) { navigated != null }
         assertEquals("demo_factura", navigated?.storedId)
         assertEquals("sess_demo_factura", navigated?.runtimeId)
+        runEspressoA11yCheck()
     }
 
     // --- soporte ---
@@ -210,6 +222,11 @@ class ChatsScreenInstrumentedTest {
 
     private fun string(id: Int): String = context.getString(id)
 
+    /** AccessibilityChecks.enable() engancha ATF a Espresso: evaluar la raíz lanza ante errores. */
+    private fun runEspressoA11yCheck() {
+        onView(isRoot()).check(matches(isDisplayed()))
+    }
+
     private fun listResult() =
         SessionListResult(
             sessions =
@@ -237,5 +254,15 @@ class ChatsScreenInstrumentedTest {
         const val MILLIS_PER_SECOND = 1_000.0
         const val HOUR_SECONDS = 3_600.0
         const val DAY_SECONDS = 86_400.0
+
+        /** §7.1: ATF activo también en el instrumentado (los mismos checks que en Robolectric). */
+        @JvmStatic
+        @BeforeClass
+        fun enableAccessibilityChecks() {
+            AccessibilityChecks
+                .enable()
+                .setRunChecksFromRootView(true)
+                .setThrowExceptionFor(AccessibilityCheckResult.AccessibilityCheckResultType.ERROR)
+        }
     }
 }

@@ -119,12 +119,7 @@ fun ChatsContent(
     var helpVisible by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 0.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             state.banner?.let { banner -> TopBanner(text = bannerText(banner)) }
             ChatsTopBar(onHelp = { helpVisible = true })
             Box(modifier = Modifier.weight(1f)) {

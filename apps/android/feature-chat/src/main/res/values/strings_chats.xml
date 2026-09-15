@@ -7,9 +7,6 @@
     <string name="chats_screen_title">Hermes</string>
     <!-- Botón grande inferior (64 dp, píldora verde). -->
     <string name="chats_new_chat">Nuevo chat</string>
-    <!-- Título que recibe el chat recién creado; %1$s = fecha ("15 de septiembre").
-         Hermes lo renombra después vía session.title. -->
-    <string name="chats_new_chat_title">Chat de %1$s</string>
     <!-- Fila de un chat todavía sin título. -->
     <string name="chats_untitled">Chat nuevo</string>
 
@@ -59,7 +56,6 @@
     <string name="chats_example_title_4">Cita del médico</string>
     <string name="chats_example_preview_4">Miércoles 24 a las 9:30, lleva la tarjeta</string>
     <string name="chats_example_time_1">10:24</string>
-    <string name="chats_example_time_2">Ayer</string>
     <string name="chats_example_time_3">Lun</string>
     <string name="chats_example_time_4">3 sep</string>
 </resources>
