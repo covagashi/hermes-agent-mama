@@ -103,8 +103,7 @@ class WsConnection internal constructor(
             method == null && id != null -> gateway.log("respuesta sin petición abierta ignorada")
 
             // Llamada RPC del cliente (id numérico ⇒ hay que responder).
-            id != null && method != null ->
-                dispatchCall(id, method, obj["params"] as? JsonObject ?: JsonObject(emptyMap()))
+            id != null && method != null -> dispatchClientCall(id, method, obj["params"])
 
             // id sin method: petición inválida (§2.2: -32600 Invalid Request).
             id != null -> sendInvalidRequest(id)
@@ -115,19 +114,21 @@ class WsConnection internal constructor(
     }
 
     private suspend fun sendInvalidRequest(id: JsonElement) {
-        send(
-            buildJsonObject {
-                put("jsonrpc", "2.0")
-                put("id", id)
-                put(
-                    "error",
-                    buildJsonObject {
-                        put("code", -32600)
-                        put("message", "invalid request: falta 'method'")
-                    },
-                )
-            },
-        )
+        sendError(id, JSON_RPC_INVALID_REQUEST, "invalid request: falta 'method'")
+    }
+
+    /** `params` de la llamada: ausente → {}, objeto → tal cual, otro tipo → -32602. */
+    private suspend fun dispatchClientCall(
+        id: JsonElement,
+        method: String,
+        params: JsonElement?,
+    ) {
+        when {
+            params == null -> dispatchCall(id, method, JsonObject(emptyMap()))
+            params is JsonObject -> dispatchCall(id, method, params)
+            // `"params": "x"` o array: params inválidos, no params vacíos.
+            else -> sendError(id, JSON_RPC_INVALID_PARAMS, "invalid params: debe ser un objeto")
+        }
     }
 
     private suspend fun dispatchCall(
@@ -151,24 +152,44 @@ class WsConnection internal constructor(
                 },
             )
         } catch (e: RpcErrorException) {
-            send(
-                buildJsonObject {
-                    put("jsonrpc", "2.0")
-                    put("id", id)
-                    put(
-                        "error",
-                        buildJsonObject {
-                            put("code", e.code)
-                            put("message", e.message)
-                            if (e.data != null) {
-                                put("data", e.data)
-                            }
-                        },
-                    )
-                },
-            )
+            sendError(id, e.code, e.message, e.data)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IllegalArgumentException) {
+            // Param con tipo inesperado (p. ej. {"session_id":{}} → str() lanza):
+            // la conexión NO muere — responde -32602 como un dispatcher real.
+            sendError(id, JSON_RPC_INVALID_PARAMS, "invalid params: ${e.message}")
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            gateway.log("dispatch de '$method' falló (${e::class.simpleName}): ${e.message}")
+            sendError(id, JSON_RPC_INTERNAL_ERROR, "internal error")
         }
         drainAfterResponse()
+    }
+
+    private suspend fun sendError(
+        id: JsonElement,
+        code: Int,
+        message: String,
+        data: JsonElement? = null,
+    ) {
+        send(
+            buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", id)
+                put(
+                    "error",
+                    buildJsonObject {
+                        put("code", code)
+                        put("message", message)
+                        if (data != null) {
+                            put("data", data)
+                        }
+                    },
+                )
+            },
+        )
     }
 
     private suspend fun drainAfterResponse() {
@@ -313,6 +334,12 @@ class WsConnection internal constructor(
                     },
                 )
             }
+    }
+
+    private companion object {
+        const val JSON_RPC_INVALID_REQUEST = -32600
+        const val JSON_RPC_INVALID_PARAMS = -32602
+        const val JSON_RPC_INTERNAL_ERROR = -32603
     }
 }
 

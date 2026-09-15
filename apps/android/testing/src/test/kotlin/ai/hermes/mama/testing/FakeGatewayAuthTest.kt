@@ -20,9 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import java.io.IOException
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
@@ -33,11 +31,18 @@ import kotlin.time.Duration
  */
 class FakeGatewayAuthTest {
     private var gateway: FakeGateway? = null
+    private val clients = java.util.concurrent.CopyOnWriteArrayList<OkHttpClient>()
 
     @AfterEach
     fun tearDown() {
         gateway?.close()
         gateway = null
+        // El dispatcher de OkHttp retiene hilos: cerrar siempre el pool del test.
+        clients.forEach {
+            it.dispatcher.executorService.shutdown()
+            it.connectionPool.evictAll()
+        }
+        clients.clear()
     }
 
     private fun startGateway(scriptName: String = "hola_mundo"): FakeGateway =
@@ -62,6 +67,7 @@ class FakeGatewayAuthTest {
             .Builder()
             .cookieJar(MemoryCookieJar())
             .build()
+            .also(clients::add)
 
     private fun OkHttpClient.post(
         url: String,
@@ -167,14 +173,42 @@ class FakeGatewayAuthTest {
                 channel.close()
             }
 
-            // Segundo uso del MISMO ticket: el servidor rechaza el upgrade con 401.
-            assertFailsWith<IOException> {
-                OkHttpWsTransport.connect("${gw.wsUrl}?ticket=$ticket", client)
-            }
+            // Segundo uso del MISMO ticket: como el real, el upgrade se acepta y
+            // el servidor cierra con 4401 (auth: ticket_invalid) — NO un 401 HTTP.
+            val second = OkHttpWsTransport.connect("${gw.wsUrl}?ticket=$ticket", client)
+            val code = withTimeout(READY_TIMEOUT_MS) { second.closedCode.await() }
+            assertEquals(WS_CLOSE_AUTH, code, "ticket reutilizado debe cerrar con 4401")
         }
+
+    @Test
+    fun `ws sin ticket se cierra 4401 cuando el guion lo exige`() =
+        runBlocking {
+            val gw = startGateway("ticket_requerido")
+            val client = newClient()
+            // Sin ticket: upgrade aceptado + cierre 4401, igual que el backend gated.
+            val noTicket = OkHttpWsTransport.connect(gw.wsUrl, client)
+            assertEquals(WS_CLOSE_AUTH, withTimeout(READY_TIMEOUT_MS) { noTicket.closedCode.await() })
+
+            // Ticket inventado: mismo cierre con auth: ticket_invalid.
+            val badTicket = OkHttpWsTransport.connect("${gw.wsUrl}?ticket=inventado", client)
+            assertEquals(WS_CLOSE_AUTH, withTimeout(READY_TIMEOUT_MS) { badTicket.closedCode.await() })
+        }
+
+    @Test
+    fun `login con rate_limited del guion da 429 y Retry-After`() {
+        val gw = startGateway("rate_limited")
+        val client = newClient()
+        client.post("${gw.httpUrl}/auth/password-login", loginBody()).use { res ->
+            assertEquals(429, res.code)
+            assertNotNull(res.header("Retry-After"), "el 429 del real lleva Retry-After")
+        }
+    }
 
     private companion object {
         const val READY_TIMEOUT_MS = 15_000L
+
+        /** Close code del real para credencial mala en /api/ws (web_routers/chat_ws.py). */
+        const val WS_CLOSE_AUTH = 4401
         val JSON_MEDIA = "application/json".toMediaType()
     }
 }

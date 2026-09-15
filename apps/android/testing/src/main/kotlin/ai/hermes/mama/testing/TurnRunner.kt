@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -19,6 +20,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.coroutines.coroutineContext
 
 /**
  * Ejecuta los `steps` de un turno del guion sobre una conexión: emite los
@@ -28,9 +30,9 @@ import kotlinx.serialization.json.put
  *
  * La corrutina vive en el scope de la conexión: si el socket muere, el turno
  * muere con él (los `srq` abiertos quedan para re-entrega por `open_requests`).
- * `session.interrupt`/`prompt.stop` la cancelan: el `finally` cierra la burbuja
- * con `message.complete {status:"interrupted"}` y retira las peticiones
- * abiertas de la sesión con `request.cancel`, como el backend real.
+ * `session.interrupt` la cancela: el `finally` cierra la burbuja con
+ * `message.complete {status:"interrupted"}` y retira las peticiones abiertas
+ * de la sesión con `request.cancel {reason:"interrupted"}`, como el real.
  */
 internal class TurnRunner(
     private val gateway: FakeGateway,
@@ -54,6 +56,9 @@ internal class TurnRunner(
     @Suppress("TooGenericExceptionCaught")
     suspend fun run() {
         session.turnMutex.withLock {
+            // El job se publica AQUÍ, ya con el mutex: session.interrupt/delete
+            // cancelan el turno VIVO — nunca un submit encolado esperando el lock.
+            session.turnJob = coroutineContext.job
             session.running = true
             emitSessionInfo()
             try {
@@ -91,6 +96,7 @@ internal class TurnRunner(
                     }
                     withdrawOpenRequests()
                     session.running = false
+                    session.turnJob = null
                     emitSessionInfo()
                 }
             }
@@ -126,6 +132,10 @@ internal class TurnRunner(
             try {
                 withTimeout(step.timeoutMs) { open.response.await() }
             } catch (ignored: TimeoutCancellationException) {
+                // El real emite request.cancel {id,method,reason:"timeout"} al
+                // vencer (server_requests.py) — el cliente debe verla, no sólo
+                // la retirada silenciosa de open_requests.
+                emitRequestCancel(open, "timeout")
                 conn.withdrawRequest(open, "timeout")
                 throw TurnAbort("timeout esperando respuesta a ${step.method} (${open.id})")
             }
@@ -149,17 +159,30 @@ internal class TurnRunner(
             return
         }
         val commandId = step.commandId ?: gateway.store.nextCommandId()
-        val pending = PendingBrowserCommand(commandId, step.action, session, conn)
+        val toolCallId = step.toolCallId ?: gateway.store.nextToolCallId()
+        val pending =
+            PendingBrowserCommand(
+                commandId = commandId,
+                action = step.action,
+                toolCallId = toolCallId,
+                controllerId = controller.controllerId,
+                session = session,
+                conn = controller.conn,
+            )
         gateway.store.pendingCommands[commandId] = pending
         session.lastCommandId = commandId
-        emit(
+        // El broker envía el frame al TRANSPORT del controlador, no al del prompt.
+        controller.conn.emitEvent(
             "browser.controller.command",
+            session,
             buildJsonObject {
                 put("command_id", commandId)
                 put("action", step.action)
                 put("arguments", substitute(step.arguments))
                 put("controller_id", controller.controllerId)
                 put("browser_profile_id", controller.browserProfileId)
+                // El frame del broker real siempre lleva tool_call_id (null si no hay).
+                put("tool_call_id", toolCallId?.let { JsonPrimitive(it) } ?: JsonNull)
             },
         )
         if (!step.awaitResult) {
@@ -170,6 +193,16 @@ internal class TurnRunner(
                 withTimeout(step.timeoutMs) { pending.result.await() }
             } catch (ignored: TimeoutCancellationException) {
                 gateway.store.pendingCommands.remove(commandId)
+                // El broker avisa al controlador con browser.controller.cancel
+                // {command_id, tool_call_id} cuando vence su espera.
+                controller.conn.emitEvent(
+                    "browser.controller.cancel",
+                    session,
+                    buildJsonObject {
+                        put("command_id", commandId)
+                        put("tool_call_id", toolCallId?.let { JsonPrimitive(it) } ?: JsonNull)
+                    },
+                )
                 throw TurnAbort("timeout esperando browser.controller.result ($commandId)")
             }
         lastResult = result["result"] ?: result
@@ -181,18 +214,21 @@ internal class TurnRunner(
             gateway.log("browser_cancel sin comando previo")
             return
         }
-        emit(
+        val pending = gateway.store.pendingCommands.remove(commandId)
+        (pending?.conn ?: conn).emitEvent(
             "browser.controller.cancel",
-            buildJsonObject { put("command_id", commandId) },
+            session,
+            buildJsonObject {
+                put("command_id", commandId)
+                put("tool_call_id", pending?.toolCallId?.let { JsonPrimitive(it) } ?: JsonNull)
+            },
         )
-        gateway.store.pendingCommands.remove(commandId)?.let { pending ->
-            pending.result.complete(
-                buildJsonObject {
-                    put("ok", false)
-                    put("error", "command cancelled")
-                },
-            )
-        }
+        pending?.result?.complete(
+            buildJsonObject {
+                put("ok", false)
+                put("error", "command cancelled")
+            },
+        )
     }
 
     private suspend fun runCancelRequest(step: ScriptStep.CancelRequest) {
@@ -202,15 +238,23 @@ internal class TurnRunner(
             return
         }
         val open = gateway.store.openRequestsById[id] ?: return gateway.log("cancel_request: '$id' no está abierta")
+        emitRequestCancel(open, step.reason)
+        conn.withdrawRequest(open, step.reason)
+    }
+
+    /** `request.cancel {id,method,reason}` con seq — el frame que el real emite al retirar una srq. */
+    private suspend fun emitRequestCancel(
+        open: OpenRequest,
+        reason: String,
+    ) {
         emit(
             "request.cancel",
             buildJsonObject {
                 put("id", open.id)
                 put("method", open.method)
-                put("reason", step.reason)
+                put("reason", reason)
             },
         )
-        conn.withdrawRequest(open, step.reason)
     }
 
     // --- azúcares ---
@@ -289,12 +333,13 @@ internal class TurnRunner(
 
     private fun appendAssistantRow(completePayload: JsonObject) {
         val text = completePayload["text"]?.jsonPrimitive?.contentOrNull ?: streamed.toString()
-        session.messages.add(
+        val rowId = session.messageCount() + 1L
+        session.addMessage(
             buildJsonObject {
                 put("role", "assistant")
                 put("text", text)
                 put("timestamp", System.currentTimeMillis() / 1000.0)
-                put("row_id", session.messages.size + 1L)
+                put("row_id", rowId)
                 if (completePayload["error"] != null && completePayload["error"] !is JsonNull) {
                     put("display_kind", "error")
                 }
@@ -304,31 +349,35 @@ internal class TurnRunner(
         streamed.setLength(0)
     }
 
-    /** Tras interrupt: retira las `srq` abiertas de la sesión con `request.cancel` (como el real). */
+    /**
+     * Tras interrupt: retira las `srq` y los comandos de navegador abiertos de
+     * ESTA sesión con su evento de cancelación (el real usa reason
+     * `"interrupted"`; el broker avisa con `browser.controller.cancel`).
+     */
     private suspend fun withdrawOpenRequests() {
         session.openRequests.values.toList().forEach { open ->
-            conn.sendQuietly(
-                buildJsonObject {
-                    put("method", "event")
-                    put(
-                        "params",
-                        buildJsonObject {
-                            put("type", "request.cancel")
-                            put("session_id", session.runtimeId)
-                            put(
-                                "payload",
-                                buildJsonObject {
-                                    put("id", open.id)
-                                    put("method", open.method)
-                                    put("reason", "session_interrupt")
-                                },
-                            )
-                        },
-                    )
-                },
-            )
-            conn.withdrawRequest(open, "session_interrupt")
+            emitRequestCancel(open, "interrupted")
+            conn.withdrawRequest(open, "interrupted")
         }
+        gateway.store.pendingCommands.values
+            .filter { it.session === session }
+            .forEach { cmd ->
+                gateway.store.pendingCommands.remove(cmd.commandId)
+                cmd.conn.emitEvent(
+                    "browser.controller.cancel",
+                    session,
+                    buildJsonObject {
+                        put("command_id", cmd.commandId)
+                        put("tool_call_id", cmd.toolCallId?.let { JsonPrimitive(it) } ?: JsonNull)
+                    },
+                )
+                cmd.result.complete(
+                    buildJsonObject {
+                        put("ok", false)
+                        put("error", "turn interrupted")
+                    },
+                )
+            }
     }
 
     // --- interpolación {{last_result}} ---
@@ -341,14 +390,41 @@ internal class TurnRunner(
             else -> element
         }
 
+    /**
+     * `{{last_result}}` como string COMPLETO devuelve el JSON resuelto (tipos
+     * preservados); embebido en un string más largo se sustituye por su forma de
+     * texto — "Respondiste: {{last_result.choice}}." → "Respondiste: once.".
+     * Un token sin resolver queda literal (visible: el fake no traga errores).
+     */
     private fun substituteString(value: String): JsonElement =
         when {
+            // Token a solas → el JSON resuelto entero (tipos preservados).
             value == LAST_RESULT_TOKEN -> lastResult
-            !value.startsWith(LAST_RESULT_PREFIX) || !value.endsWith("}}") -> JsonPrimitive(value)
-            else ->
+            // String completo = un único token con path → su valor JSON.
+            TOKEN_PATH_REGEX.matches(value) ->
                 resolveResultPath(value.removePrefix(LAST_RESULT_PREFIX).removeSuffix("}}"))
                     ?: JsonPrimitive(value)
+            // Sin tokens: devolver tal cual.
+            !value.contains(TOKEN_HEAD) -> JsonPrimitive(value)
+            // Tokens embebidos: cada uno a su forma textual (o literal si no resuelve).
+            else -> JsonPrimitive(TOKEN_REGEX.replace(value) { match -> renderToken(match.value) })
         }
+
+    /** Forma textual de un `{{last_result[.path]}}`: primitivo → contenido; resto → JSON compacto. */
+    private fun renderToken(token: String): String {
+        val path = token.removePrefix("{{").removeSuffix("}}").removePrefix("last_result")
+        val resolved =
+            if (path.isEmpty()) {
+                lastResult
+            } else {
+                resolveResultPath(path.removePrefix("."))
+            } ?: return token
+        return when {
+            resolved is JsonNull -> "null"
+            resolved is JsonPrimitive && resolved.isString -> resolved.content
+            else -> resolved.toString()
+        }
+    }
 
     private fun resolveResultPath(path: String): JsonElement? {
         var current: JsonElement = lastResult
@@ -366,6 +442,11 @@ internal class TurnRunner(
     private companion object {
         const val LAST_RESULT_TOKEN = "{{last_result}}"
         const val LAST_RESULT_PREFIX = "{{last_result."
+        const val TOKEN_HEAD = "{{last_result"
+        val TOKEN_REGEX = Regex("""\{\{last_result(\.[A-Za-z0-9_.-]+)?\}\}""")
+
+        /** El string entero es UN token `{{last_result.campo…}}` (sin texto alrededor). */
+        val TOKEN_PATH_REGEX = Regex("""\{\{last_result\.[A-Za-z0-9_.-]+\}\}""")
         const val PREVIEW_CHARS = 80
     }
 }

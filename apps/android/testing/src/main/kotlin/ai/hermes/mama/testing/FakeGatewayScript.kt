@@ -26,6 +26,7 @@ import java.io.File
  *   "description": "texto libre",
  *   "auth": {"username": "usuario", "password": "mama", "user_id": "…",
  *            "display_name": "…", "email": "…", "rate_limited": false},
+ *   "browser": {"enabled": true, "developer_mode": false},
  *   "require_ws_ticket": false,
  *   "replay_epoch": "epoch-fake",
  *   "sessions": [{"id": "stored_x", "runtime_id": "sess_x", "title": "…",
@@ -68,10 +69,12 @@ import java.io.File
  * inserta el result entero y `"{{last_result.campo}}"` un campo (p. ej.
  * `"{{last_result.choice}}"` tras un `approval`).
  */
+@Suppress("LongParameterList") // config declarativa: un campo por clave del guion.
 class FakeGatewayScript internal constructor(
     val name: String,
     val description: String,
     val auth: AuthConfig,
+    val browser: BrowserConfig,
     val requireWsTicket: Boolean,
     val replayEpoch: String,
     val skin: JsonObject,
@@ -88,6 +91,17 @@ class FakeGatewayScript internal constructor(
         val displayName: String = "Usuario Fake",
         val email: String = "usuario@hermes.example.invalid",
         val rateLimited: Boolean = false,
+    )
+
+    /**
+     * `browser.extension_control` del guion (§2.6): `enabled=false` reproduce el
+     * 4403 del flag apagado (F3 → ServerNotEnabled); `developer_mode` admite las
+     * capabilities privilegiadas (`browser_cdp`/`browser_evaluate`). En el fake
+     * `enabled` por defecto es `true`: existe para ejercitar el controlador.
+     */
+    data class BrowserConfig(
+        val enabled: Boolean = true,
+        val developerMode: Boolean = false,
     )
 
     /** Sesión precargada del guion (aparece en `session.list`). */
@@ -153,6 +167,7 @@ class FakeGatewayScript internal constructor(
             val action: String,
             val arguments: JsonObject,
             val commandId: String?,
+            val toolCallId: String?,
             val awaitResult: Boolean,
             val timeoutMs: Long,
         ) : ScriptStep
@@ -191,6 +206,7 @@ class FakeGatewayScript internal constructor(
     fun turnFor(text: String): TurnScript? =
         turns.firstOrNull { turn -> turn.matcher == null || turn.matcher.matches(text) } ?: defaultTurn
 
+    @Suppress("TooManyFunctions") // parser declarativo: un helper por clave del guion.
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -209,7 +225,9 @@ class FakeGatewayScript internal constructor(
          */
         fun load(nameOrPath: String): FakeGatewayScript {
             val trimmed = nameOrPath.trim()
-            require(trimmed.isNotEmpty()) { "nombre de guion vacío" }
+            if (trimmed.isEmpty()) {
+                throw FakeScriptException("nombre de guion vacío")
+            }
             val loaded =
                 resolveScriptText(trimmed)
                     ?: throw FakeScriptException(
@@ -267,24 +285,28 @@ class FakeGatewayScript internal constructor(
                 root as? JsonObject
                     ?: throw FakeScriptException("$source: la raíz del guion debe ser un objeto JSON")
 
-            val auth = parseAuth(obj["auth"] as? JsonObject, source)
+            // Secciones con tipo erróneo ({} en vez de [], "x" en vez de {})
+            // fallan nombrando el campo — un guion mal escrito no se tolera.
+            val auth = parseAuth(obj["auth"]?.objAt("$source: auth"), source)
+            val browser = parseBrowser(obj["browser"]?.objAt("$source: browser"))
             val sessions =
-                (obj["sessions"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapIndexed { i, el ->
+                obj["sessions"].arrAt("$source: sessions").mapIndexed { i, el ->
                     parseSession(el.objAt("$source: sessions[$i]"), i)
                 }
             val turns =
-                (obj["turns"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapIndexed { i, el ->
+                obj["turns"].arrAt("$source: turns").mapIndexed { i, el ->
                     parseTurn(el.objAt("$source: turns[$i]"), "$source: turns[$i]")
                 }
             val defaultTurn =
-                (obj["default_turn"] as? JsonObject)?.let { parseTurn(it, "$source: default_turn") }
+                obj["default_turn"]?.objAt("$source: default_turn")?.let { parseTurn(it, "$source: default_turn") }
             return FakeGatewayScript(
                 name = obj["name"].strOrNull() ?: source.substringAfterLast('/').removeSuffix(".json"),
                 description = obj["description"].strOrNull().orEmpty(),
                 auth = auth,
+                browser = browser,
                 requireWsTicket = obj["require_ws_ticket"].boolOrNull() ?: false,
                 replayEpoch = obj["replay_epoch"].strOrNull() ?: "epoch-fake",
-                skin = obj["skin"] as? JsonObject ?: JsonObject(emptyMap()),
+                skin = obj["skin"]?.objAt("$source: skin") ?: JsonObject(emptyMap()),
                 sessions = sessions,
                 turns = turns,
                 defaultTurn = defaultTurn,
@@ -312,6 +334,12 @@ class FakeGatewayScript internal constructor(
                 }
             }
         }
+
+        private fun parseBrowser(obj: JsonObject?): BrowserConfig =
+            BrowserConfig(
+                enabled = obj?.get("enabled").boolOrNull() ?: true,
+                developerMode = obj?.get("developer_mode").boolOrNull() ?: false,
+            )
 
         private fun parseSession(
             obj: JsonObject,
@@ -363,18 +391,26 @@ class FakeGatewayScript internal constructor(
             if (obj == null) {
                 return null
             }
+            // Un `when` que no casa nada reconocible sería un catch-all SILENCIOSO
+            // (matcher vacío → matches()=true): el guion debe fallar nombrando las
+            // claves, como hace el parser de steps con claves desconocidas.
+            val unknown = obj.keys - MATCHER_KEYS
+            if (unknown.isNotEmpty()) {
+                matcherError(at, "claves desconocidas $unknown (válidas: $MATCHER_KEYS)")
+            }
+            val textContains = obj["text_contains"].strOrNull()
             val regex =
                 obj["text_regex"].strOrNull()?.let { pattern ->
                     try {
                         Regex(pattern, RegexOption.IGNORE_CASE)
                     } catch (e: IllegalArgumentException) {
-                        throw FakeScriptException("$at.when: regex inválida '$pattern' (${e.message})", e)
+                        matcherError(at, "regex inválida '$pattern' (${e.message})", e)
                     }
                 }
-            return PromptMatcher(
-                textContains = obj["text_contains"].strOrNull(),
-                textRegex = regex,
-            )
+            if (textContains == null && regex == null) {
+                matcherError(at, "necesita $MATCHER_KEYS con algún valor ({} casaría todo)")
+            }
+            return PromptMatcher(textContains = textContains, textRegex = regex)
         }
 
         private fun kotlinx.serialization.json.JsonElement?.strOrNull(): String? =
@@ -390,6 +426,17 @@ class FakeGatewayScript internal constructor(
 
         private fun kotlinx.serialization.json.JsonElement?.objAt(at: String): JsonObject =
             this as? JsonObject ?: throw FakeScriptException("$at: debe ser un objeto JSON")
+
+        /** `null` → array vacío; presente pero no-array → error con la ruta del campo. */
+        private fun kotlinx.serialization.json.JsonElement?.arrAt(at: String): kotlinx.serialization.json.JsonArray =
+            when {
+                this == null -> kotlinx.serialization.json.JsonArray(emptyList())
+                this is kotlinx.serialization.json.JsonArray -> this
+                else -> throw FakeScriptException("$at: debe ser un array JSON")
+            }
+
+        /** Claves válidas de un `when` de turno (cualquier otra → error, nunca catch-all). */
+        private val MATCHER_KEYS = setOf("text_contains", "text_regex")
 
         private const val DEFAULT_REQUEST_TIMEOUT_MS = 30_000L
 
@@ -506,6 +553,7 @@ class FakeGatewayScript internal constructor(
                             ?: throw FakeScriptException("$at.browser_command: falta 'action'"),
                     arguments = cmd["arguments"] as? JsonObject ?: JsonObject(emptyMap()),
                     commandId = cmd["command_id"].strOrNull(),
+                    toolCallId = cmd["tool_call_id"].strOrNull(),
                     awaitResult = cmd["await"].boolOrNull() ?: true,
                     timeoutMs = cmd["timeout_ms"].numOrNull()?.toLong() ?: BROWSER_COMMAND_TIMEOUT_MS,
                 )
@@ -559,6 +607,13 @@ class FakeGatewayScript internal constructor(
         }
     }
 }
+
+/** `throw FakeScriptException` en un solo punto (los errores de `when` comparten prefijo). */
+private fun matcherError(
+    at: String,
+    detail: String,
+    cause: Throwable? = null,
+): Nothing = throw FakeScriptException("$at.when: $detail", cause)
 
 /** Guion mal formado o no encontrado: el mensaje dice qué campo falta y en qué paso. */
 class FakeScriptException(

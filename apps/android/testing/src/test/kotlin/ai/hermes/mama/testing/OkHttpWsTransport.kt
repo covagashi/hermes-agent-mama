@@ -32,6 +32,9 @@ class OkHttpWsTransport private constructor(
     private val failed = CompletableDeferred<Throwable>()
     private var socket: WebSocket? = null
 
+    /** Close code con el que el SERVIDOR cerró (4401 auth, 1001 close_socket del guion…). */
+    val closedCode = CompletableDeferred<Int>()
+
     override val incoming: Flow<String> = incomingChannel.receiveAsFlow()
 
     override suspend fun send(text: String) {
@@ -75,6 +78,7 @@ class OkHttpWsTransport private constructor(
         code: Int,
         reason: String,
     ) {
+        closedCode.complete(code)
         incomingChannel.close()
     }
 
@@ -102,7 +106,9 @@ class OkHttpWsTransport private constructor(
 
         /**
          * Abre el WS y espera al `onOpen`; si el servidor rechaza el upgrade
-         * (ticket inválido → 401) lanza [IOException] con el código HTTP.
+         * HTTP lanza [IOException] con el código. OJO: una credencial mala en
+         * `/api/ws` NO llega aquí — el real acepta el upgrade y cierra con
+         * [closedCode] 4401 tras el `onOpen`.
          */
         suspend fun connect(
             url: String,

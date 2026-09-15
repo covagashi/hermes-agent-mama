@@ -1,0 +1,41 @@
+{
+  "name": "sesiones",
+  "description": "Dos sesiones semilla: 'stored_viva' entra al registro runtime (delete → 4023 como el real) y 'stored_fria' queda stored-only (borrable hasta que session.resume la suba).",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-sesiones-1",
+  "sessions": [
+    {
+      "id": "stored_viva",
+      "runtime_id": "sess_viva",
+      "title": "Chat vivo",
+      "preview": "sigue abierto",
+      "started_at": 1700000000.0,
+      "messages": [
+        { "role": "user", "text": "hola" },
+        { "role": "assistant", "text": "buenas" }
+      ]
+    },
+    {
+      "id": "stored_fria",
+      "title": "Chat archivado",
+      "preview": "ya terminó",
+      "started_at": 1699999000.0,
+      "messages": [
+        { "role": "user", "text": "adiós" }
+      ]
+    },
+    {
+      "id": "stored_otra",
+      "title": "Otro archivado",
+      "preview": "para resume",
+      "started_at": 1699998000.0,
+      "messages": [
+        { "role": "user", "text": "otra vez" }
+      ]
+    }
+  ],
+  "turns": []
+}

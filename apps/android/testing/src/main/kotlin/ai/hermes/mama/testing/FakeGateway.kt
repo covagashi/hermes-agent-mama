@@ -3,7 +3,6 @@ package ai.hermes.mama.testing
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
@@ -22,8 +21,9 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
-import io.ktor.util.AttributeKey
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,6 +90,10 @@ class FakeGateway(
 
     @Volatile
     private var boundPort = -1
+
+    /** Error de bind explícito (puerto efímero no resuelto): lo lanza [start], nunca un 0 silencioso. */
+    @Volatile
+    private var bindFailure: String? = null
     private val boundLatch = CountDownLatch(1)
     private val stopLatch = CountDownLatch(1)
     private var server: EmbeddedServer<*, *>? = null
@@ -123,15 +127,10 @@ class FakeGateway(
                 monitor.subscribe(ApplicationStopped) {
                     stopLatch.countDown()
                 }
-                intercept(ApplicationCallPipeline.Setup) {
-                    if (call.guardWebSocketAuth()) {
-                        finish()
-                    }
-                }
                 routing {
-                    post("/auth/password-login") { call.handlePasswordLogin() }
-                    get("/api/auth/me") { call.handleMe() }
-                    post("/api/auth/ws-ticket") { call.handleWsTicket() }
+                    post("/auth/password-login") { call.guardedHttp { handlePasswordLogin() } }
+                    get("/api/auth/me") { call.guardedHttp { handleMe() } }
+                    post("/api/auth/ws-ticket") { call.guardedHttp { handleWsTicket() } }
                     webSocket("/api/ws") { serveWs() }
                 }
             }
@@ -140,6 +139,10 @@ class FakeGateway(
         if (!boundLatch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
             newServer.stop(0, STOP_GRACE_MS)
             error("FakeGateway no llegó a bind en ${timeoutMs}ms")
+        }
+        bindFailure?.let { failure ->
+            newServer.stop(0, STOP_GRACE_MS)
+            error(failure)
         }
         logger("FakeGateway[${script.name}] escuchando en $httpUrl (ws $wsUrl)")
         return this
@@ -161,11 +164,12 @@ class FakeGateway(
 
     private fun seedSessions() {
         script.sessions.forEachIndexed { index, seed ->
-            val runtime = seed.runtimeId ?: "sess_seed_$index"
+            // Seed sin `runtime_id` = stored-only (borrable): NO entra al
+            // registro vivo hasta que session.resume la suba, como el real.
             store.add(
                 FakeSession(
                     storedId = seed.storedId,
-                    runtimeId = runtime,
+                    runtimeId = seed.runtimeId ?: "sess_seed_$index",
                     title = seed.title,
                     preview = seed.preview,
                     startedAt = seed.startedAt,
@@ -173,6 +177,7 @@ class FakeGateway(
                     hidden = seed.hidden,
                     initialMessages = seed.messages,
                 ),
+                live = seed.runtimeId != null,
             )
         }
     }
@@ -196,12 +201,43 @@ class FakeGateway(
             }
         }
         if (boundPort < 0) {
-            boundPort = requestedPort
+            if (requestedPort > 0) {
+                // Puerto explícito: el bind ya lo hizo el engine; resolvedConnectors
+                // vacío es sólo una laguna del monitor.
+                boundPort = requestedPort
+            } else {
+                // port=0 sin conector resuelto: error explícito, jamás un 0 silencioso.
+                bindFailure = "FakeGateway no resolvió el puerto efímero tras $BOUND_PORT_ATTEMPTS intentos"
+            }
         }
         boundLatch.countDown()
     }
 
     // --- HTTP de autenticación (§2.1) ---
+
+    /**
+     * Envuelve un handler HTTP: un fallo por culpa del cliente (JSON/tipos) → 400;
+     * cualquier otro → 500. Sin el wrapper una excepción tumba la request con el
+     * página de error de Ktor y el test no ve el código real.
+     */
+    private suspend fun io.ktor.server.application.ApplicationCall.guardedHttp(
+        body: suspend io.ktor.server.application.ApplicationCall.() -> Unit,
+    ) {
+        try {
+            body()
+        } catch (e: IllegalArgumentException) {
+            respondText(
+                "bad request: ${e.message}",
+                ContentType.Text.Plain,
+                HttpStatusCode.BadRequest,
+            )
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log("HTTP handler falló (${e::class.simpleName}): ${e.message}")
+            respondText("internal error", ContentType.Text.Plain, HttpStatusCode.InternalServerError)
+        }
+    }
 
     private suspend fun io.ktor.server.application.ApplicationCall.handlePasswordLogin() {
         val body =
@@ -261,49 +297,55 @@ class FakeGateway(
     // --- WebSocket (§2.2) ---
 
     /**
-     * Rechaza el upgrade `/api/ws` ANTES del 101 cuando el ticket es inválido
-     * (como `hermes serve` gated); sin ticket se acepta en modo dev salvo que el
-     * guion pida `require_ws_ticket`. Devuelve `true` si rechazó (el caller hace
-     * `finish()`).
+     * Credencial del upgrade `/api/ws` — NO rechaza antes del 101: como el real
+     * (`web_routers/chat_ws.py`), el upgrade se acepta y la conexión se cierra
+     * con el code 4401. Devuelve la identidad sellada (ticket) o `null` si el
+     * socket debe cerrarse; sin ticket en modo dev → identidad NO autenticada.
      */
-    private suspend fun io.ktor.server.application.ApplicationCall.guardWebSocketAuth(): Boolean {
-        val rejection = wsAuthRejection()
-        if (rejection != null) {
-            respondText(rejection, ContentType.Text.Plain, HttpStatusCode.Unauthorized)
-        }
-        return rejection != null
-    }
-
-    /** `null` = admitido; si no, el motivo de rechazo que se devuelve en el 401. */
-    private fun io.ktor.server.application.ApplicationCall.wsAuthRejection(): String? {
+    private fun io.ktor.server.application.ApplicationCall.wsIdentityOrRejection(): Pair<FakeIdentity?, String?> {
         if (request.path() != "/api/ws") {
-            return null
+            return null to null
         }
         val ticket = request.queryParameters["ticket"]
         return when {
-            ticket != null -> {
-                val identity = auth.consumeTicket(ticket)
-                if (identity == null) {
-                    "ticket_invalid"
-                } else {
-                    attributes.put(WS_IDENTITY, identity)
-                    null
-                }
-            }
+            ticket != null ->
+                auth
+                    .consumeTicket(ticket)
+                    ?.let { it to null }
+                    ?: (null to "ticket_invalid")
 
-            script.requireWsTicket -> "no_credential"
-            else -> null
+            script.requireWsTicket -> null to "no_credential"
+
+            // Modo dev (require_ws_ticket=false): entra sin identidad sellada,
+            // igual que un transport legacy del real — browser.controller.* → 4403.
+            else -> FakeIdentity(script.auth.userId, script.auth.provider, authenticated = false) to null
         }
     }
 
     private suspend fun DefaultWebSocketServerSession.serveWs() {
-        val identity =
-            call.attributes.getOrNull(WS_IDENTITY)
-                ?: FakeIdentity(script.auth.userId, script.auth.provider)
+        val (identity, rejection) = call.wsIdentityOrRejection()
+        if (identity == null) {
+            // El real acepta el upgrade y cierra con 4401 (auth: <motivo>).
+            close(CloseReason(WS_CLOSE_UNAUTHORIZED, "auth: ${rejection ?: "no_credential"}"))
+            return
+        }
         val conn = WsConnection(this, identity, this@FakeGateway)
         connections.add(conn)
         try {
-            conn.emitEvent("gateway.ready", null, readyPayload())
+            // gateway.ready va SÓLO a esta conexión y sin session_id/seq (ws.py:
+            // `params: {"type": "gateway.ready", "payload": {…}}`).
+            conn.send(
+                buildJsonObject {
+                    put("method", "event")
+                    put(
+                        "params",
+                        buildJsonObject {
+                            put("type", "gateway.ready")
+                            put("payload", readyPayload())
+                        },
+                    )
+                },
+            )
             for (frame in incoming) {
                 if (frame is Frame.Text) {
                     conn.onText(frame.readText())
@@ -351,10 +393,7 @@ class FakeGateway(
                 put("payload", payload)
             }
         if (session != null) {
-            session.eventLog.add(params)
-            if (session.eventLog.size > EVENT_LOG_CAP) {
-                session.eventLog.removeAt(0)
-            }
+            session.appendEvent(params)
         }
         val frame =
             buildJsonObject {
@@ -396,8 +435,9 @@ class FakeGateway(
         private const val STOP_TIMEOUT_MS = 1_000L
         private const val BOUND_PORT_ATTEMPTS = 50
         private const val BOUND_PORT_RETRY_MS = 50L
-        private const val EVENT_LOG_CAP = 500
-        private val WS_IDENTITY = AttributeKey<FakeIdentity>("fake.ws.identity")
+
+        /** Close code con el que el backend real cierra `/api/ws` con credencial mala (chat_ws.py). */
+        private const val WS_CLOSE_UNAUTHORIZED: Short = 4401
 
         internal fun JsonObject.str(key: String): String? =
             this[key]?.jsonPrimitive?.takeIf { it.isString }?.contentOrNull

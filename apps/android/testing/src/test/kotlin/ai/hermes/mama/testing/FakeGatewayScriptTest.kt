@@ -14,7 +14,24 @@ import kotlin.test.assertTrue
 class FakeGatewayScriptTest {
     @Test
     fun `todos los guiones empaquetados cargan`() {
-        for (name in listOf("hola_mundo", "deltas", "approval", "clarify", "browser", "error", "lento")) {
+        val names =
+            listOf(
+                "hola_mundo",
+                "deltas",
+                "approval",
+                "clarify",
+                "browser",
+                "browser_off",
+                "browser_cancel",
+                "error",
+                "lento",
+                "rate_limited",
+                "renombra",
+                "request_cancel",
+                "sesiones",
+                "ticket_requerido",
+            )
+        for (name in names) {
             val script = FakeGatewayScript.load(name)
             assertEquals(name, script.name)
         }
@@ -61,6 +78,46 @@ class FakeGatewayScriptTest {
                 )
             }
         assertTrue(error.message.orEmpty().contains("method"))
+    }
+
+    @Test
+    fun `when con claves desconocidas da error que las nombra`() {
+        val error =
+            assertFailsWith<FakeScriptException> {
+                FakeGatewayScript.parse(
+                    """{"name":"x","turns":[{"when":{"txt":"hola"},"steps":[]}]}""",
+                    source = "test.json",
+                )
+            }
+        // Un matcher nulo por clave desconocida sería un catch-all SILENCIOSO.
+        assertTrue(error.message.orEmpty().contains("txt"), "debe nombrar la clave mala: ${error.message}")
+        assertTrue(error.message.orEmpty().contains("text_contains"))
+    }
+
+    @Test
+    fun `when vacio da error en vez de casar todo`() {
+        val error =
+            assertFailsWith<FakeScriptException> {
+                FakeGatewayScript.parse(
+                    """{"name":"x","turns":[{"when":{},"steps":[]}]}""",
+                    source = "test.json",
+                )
+            }
+        assertTrue(error.message.orEmpty().contains("when"))
+    }
+
+    @Test
+    fun `browser developer_mode se lee del guion`() {
+        val script =
+            FakeGatewayScript.parse(
+                """{"name":"x","browser":{"enabled":false,"developer_mode":true}}""",
+                source = "test.json",
+            )
+        assertEquals(false, script.browser.enabled)
+        assertEquals(true, script.browser.developerMode)
+        // Por defecto: controlador habilitado sin caps de desarrollador.
+        assertEquals(true, FakeGatewayScript.echo().browser.enabled)
+        assertEquals(false, FakeGatewayScript.echo().browser.developerMode)
     }
 
     @Test

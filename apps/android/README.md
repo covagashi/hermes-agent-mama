@@ -63,12 +63,21 @@ pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
 | `approval` | Petición servidor→cliente `approval` (`srq-*`) que espera Sí/No |
 | `clarify` | Pregunta por lotes (dos `qid`) y pregunta simple `{answer}` |
 | `browser` | Controlador de navegador: navigate + snapshot + click con `browser.controller.result` |
+| `browser_off` | `browser.enabled=false`: todo `browser.controller.*` → 4403 (flag apagado) |
+| `browser_cancel` | `browser_command` sin esperar + `browser.controller.cancel` del servidor |
 | `error` | `message.complete` con error; un prompt `boom` además recibe error JSON-RPC |
 | `lento` | Turno largo con pausas: para Parar (`session.interrupt`) y `close_socket` |
+| `rate_limited` | Todo login → 429 con `Retry-After` (pantalla de rate limit) |
+| `renombra` | El servidor renombra el chat a mitad de turno (`session.title` + `sessions.changed`) |
+| `request_cancel` | `request.cancel` por timeout de la `srq` o por `cancel_request` del guion |
+| `sesiones` | Seeds viva (delete → 4023) y stored-only (borrable hasta `session.resume`) |
+| `ticket_requerido` | `require_ws_ticket`: `/api/ws` sin ticket → cierre 4401 tras el upgrade |
 
 Credenciales sintéticas por defecto: `usuario` / `mama` (cada guion puede
 redefinirlas en `auth`). El login devuelve las cookies `hermes_session_at` /
-`hermes_session_provider` y el WS pide un `ticket` de un solo uso (30 s).
+`hermes_session_provider` y un `ticket` de un solo uso (30 s) abre el WS — en
+modo dev el socket también entra sin ticket (identidad NO autenticada:
+`browser.controller.*` → 4403) salvo que el guion ponga `require_ws_ticket`.
 
 En tests JVM el gateway se empotra directamente — ver `FakeGatewayTest`:
 

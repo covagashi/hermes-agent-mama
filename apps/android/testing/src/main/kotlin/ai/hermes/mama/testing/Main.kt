@@ -23,7 +23,13 @@ object Main {
     @JvmStatic
     @Suppress("MemberNameEqualsClassName") // `Main.main` es la convención de entry point.
     fun main(args: Array<String>) {
-        val options = Options.parse(args)
+        val options =
+            try {
+                Options.parse(args)
+            } catch (e: FakeScriptException) {
+                System.err.println("FakeGateway: ${e.message}")
+                exitProcess(2)
+            }
         val script =
             try {
                 FakeGatewayScript.load(options.script)
@@ -67,7 +73,7 @@ object Main {
             fun parse(args: Array<String>): Options {
                 var script = System.getenv("FAKE_SCRIPT") ?: DEFAULT_SCRIPT
                 var host = System.getenv("FAKE_HOST") ?: DEFAULT_HOST
-                var port = System.getenv("FAKE_PORT")?.toIntOrNull() ?: DEFAULT_PORT
+                var port = parsePort(System.getenv("FAKE_PORT"), "FAKE_PORT") ?: DEFAULT_PORT
                 var i = 0
                 while (i < args.size) {
                     val arg = args[i]
@@ -84,7 +90,9 @@ object Main {
                         }
 
                         Flag.PORT -> {
-                            port = args.valueAfter(i, arg).toIntOrNull() ?: port
+                            port =
+                                parsePort(args.valueAfter(i, arg), "--port")
+                                    ?: throw FakeScriptException("imposible: --port sin valor")
                             i += 1
                         }
 
@@ -122,6 +130,18 @@ object Main {
                 }
                 return getOrNull(index)
                     ?: throw FakeScriptException("el flag $flag necesita un valor")
+            }
+
+            /** `--port abc` / `FAKE_PORT=abc` → error claro; `null` → sin override. */
+            private fun parsePort(
+                value: String?,
+                origin: String,
+            ): Int? {
+                if (value == null) {
+                    return null
+                }
+                return value.toIntOrNull()
+                    ?: throw FakeScriptException("$origin: puerto inválido '$value' (esperaba un número)")
             }
 
             private val HELP_TEXT =

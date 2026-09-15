@@ -1,0 +1,28 @@
+{
+  "name": "browser_cancel",
+  "description": "El guion emite un browser_command sin esperar y luego lo cancela (browser.controller.cancel {command_id, tool_call_id}) — para probar la cancelación de comandos en vuelo del controlador.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-bcancel-1",
+  "sessions": [],
+  "turns": [
+    {
+      "steps": [
+        { "event": "message.start" },
+        {
+          "browser_command": {
+            "action": "browser_navigate",
+            "arguments": { "url": "https://tienda.example.invalid/lenta" },
+            "await": false
+          }
+        },
+        { "sleep_ms": 300 },
+        { "browser_cancel": {} },
+        { "delta": "Paré la navegación, tardaba demasiado." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

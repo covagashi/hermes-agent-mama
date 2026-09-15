@@ -1,0 +1,41 @@
+{
+  "name": "request_cancel",
+  "description": "El servidor abre una aprobación y la retira él mismo (request.cancel {id,method,reason}) — para probar que el cliente desestima una petición cancelada por el servidor (C6).",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-cancel-1",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "timeout" },
+      "steps": [
+        { "event": "message.start" },
+        {
+          "request": {
+            "method": "approval",
+            "params": { "command": "send_email", "description": "Aprobación que vence sola", "choices": ["once", "deny"] },
+            "timeout_ms": 600
+          }
+        }
+      ]
+    },
+    {
+      "steps": [
+        { "event": "message.start" },
+        {
+          "request": {
+            "method": "approval",
+            "params": { "command": "send_email", "description": "Aprobación que el servidor retira", "choices": ["once", "deny"] },
+            "await": false
+          }
+        },
+        { "sleep_ms": 400 },
+        { "cancel_request": { "reason": "answered_elsewhere" } },
+        { "delta": "Ya no hacía falta: se resolvió por otro lado." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}
