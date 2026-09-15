@@ -8,6 +8,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,6 +71,16 @@ public class WebViewController(
     /** Los comandos se ejecutan de uno en uno: el WebView es un recurso único. */
     private val execMutex = Mutex()
 
+    private val mutableBusy = MutableStateFlow(false)
+
+    /**
+     * `true` mientras haya un comando registrado en [inflight] — haya empezado
+     * o siga encolado tras [execMutex]. La pantalla Navegador (§5/F4) muestra
+     * el velo «Un momento…» con él; la usuaria sólo toca el WebView cuando no
+     * hay comando en curso.
+     */
+    public val busy: StateFlow<Boolean> = mutableBusy.asStateFlow()
+
     /** «pageFinished + calma de red» (extraído a [PageSettler] por claridad). */
     private val settler = PageSettler(nowMs, timeouts.networkCalmMs)
 
@@ -104,6 +117,7 @@ public class WebViewController(
                 "Duplicate command_id \"${command.commandId.take(MAX_WIRE_TAG_CHARS)}\"",
             )
         }
+        mutableBusy.value = true
         // Si el job muere sin correr su cuerpo (cancel en la ventana
         // putIfAbsent→start, scope ya muerto o un Error fuera de Exception),
         // outcome.await() no puede colgar: la muerte del job produce resultado.
@@ -122,7 +136,13 @@ public class WebViewController(
         return try {
             outcome.await()
         } finally {
-            inflight.remove(command.commandId, job)
+            // Atómico: con dos execute() en paralelo, un isNotEmpty() leído
+            // antes del remove del otro sobrescribiría su busy=false (velo
+            // atascado). El par remove+lectura va bajo el mismo monitor.
+            synchronized(inflight) {
+                inflight.remove(command.commandId, job)
+                mutableBusy.value = inflight.isNotEmpty()
+            }
             // El llamador se fue (cancelaron su corrutina): el trabajo no queda huérfano.
             if (!outcome.isCompleted) {
                 job.cancel()

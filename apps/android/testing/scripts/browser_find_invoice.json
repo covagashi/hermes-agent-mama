@@ -1,0 +1,30 @@
+{
+  "name": "browser_find_invoice",
+  "description": "Guion F4 'buscar factura' (§5/F4): tool.start browser_* → auto-registro + NavigateToBrowser, tres comandos con resultado ok (navigate/snapshot/click sobre la fixture servida por MockWebServer), progresos browser.progress y un navigate lento que queda en curso para que el test pulse Parar (session.interrupt). ATENCIÓN: las URLs llevan el token {{WEB}} — el test lo sustituye por la base del MockWebServer antes de FakeGatewayScript.parse.",
+  "auth": {
+    "username": "usuario",
+    "password": "mama"
+  },
+  "replay_epoch": "epoch-browser-f4",
+  "sessions": [],
+  "turns": [
+    {
+      "when": { "text_contains": "factura" },
+      "steps": [
+        { "event": "message.start" },
+        { "event": "tool.start", "payload": { "tool_id": "tool-br-1", "name": "browser_navigate", "context": "abriendo la web de la tienda…" } },
+        { "event": "browser.progress", "payload": { "message": "Abro la web de la tienda", "level": "info" } },
+        { "browser_command": { "action": "browser_navigate", "arguments": { "url": "{{WEB}}/orders.html" } } },
+        { "event": "browser.progress", "payload": { "message": "Busco la factura en tus pedidos", "level": "info" } },
+        { "browser_command": { "action": "browser_snapshot", "arguments": { "full": false } } },
+        { "event": "browser.progress", "payload": { "message": "Voy a pulsar «Descargar factura»", "level": "info" } },
+        { "browser_command": { "action": "browser_click", "arguments": { "ref": "@e6" } } },
+        { "event": "browser.progress", "payload": { "message": "Descargo la factura", "level": "info" } },
+        { "browser_command": { "action": "browser_navigate", "arguments": { "url": "{{WEB}}/lenta.html" } } },
+        { "event": "tool.complete", "payload": { "tool_id": "tool-br-1", "name": "browser_navigate", "summary": "factura localizada" } },
+        { "delta": "Ya está: abrí tus pedidos y descargué la factura." },
+        { "event": "message.complete", "payload": { "status": "complete" } }
+      ]
+    }
+  ]
+}

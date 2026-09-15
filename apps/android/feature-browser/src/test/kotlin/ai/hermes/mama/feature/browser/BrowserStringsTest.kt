@@ -5,9 +5,10 @@ import java.io.File
 import kotlin.test.assertTrue
 
 /**
- * Copy exacto que fija el roadmap para F3 (§5): el aviso de auto-navegación y
- * el texto de `ServerNotEnabled` deben existir tal cual en `values/` — la UI de
- * F4 los consume por `R.string`.
+ * Copy exacto que fija el roadmap para F3/F4 (§5): el aviso de auto-navegación,
+ * el texto de `ServerNotEnabled` y los textos de la pantalla («Parar»,
+ * «Un momento…», «Hermes está navegando…», «Volver al chat») deben existir tal
+ * cual en `values/` — la UI los consume por `R.string`.
  */
 class BrowserStringsTest {
     // Gradle ejecuta los unit tests con cwd = directorio del módulo.
@@ -27,5 +28,17 @@ class BrowserStringsTest {
             stringsXml.contains(">El servidor no tiene activado el navegador compartido<"),
             "browser_server_not_enabled debe ser «El servidor no tiene activado el navegador compartido» (§5/F3)",
         )
+    }
+
+    @Test
+    fun `copy de la pantalla Navegador`() {
+        listOf(
+            ">Hermes está navegando…<" to "browser_default_progress (§5/F4)",
+            ">Un momento…<" to "browser_wait (§5/F4)",
+            ">Parar<" to "browser_stop (§5/F4)",
+            ">Volver al chat<" to "browser_back_to_chat (§5/F4)",
+        ).forEach { (needle, name) ->
+            assertTrue(stringsXml.contains(needle), "$name debe existir tal cual en values/")
+        }
     }
 }

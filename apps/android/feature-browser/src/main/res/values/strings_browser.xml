@@ -9,4 +9,26 @@
 
     <!-- Estado ServerNotEnabled: el servidor respondió 4403 al registro del controlador. -->
     <string name="browser_server_not_enabled">El servidor no tiene activado el navegador compartido</string>
+
+    <!-- Título del panel (paneTitle): TalkBack lo anuncia al abrirse la pantalla. -->
+    <string name="browser_screen_title">Navegador</string>
+
+    <!-- Barra superior cuando todavía no llegó ningún browser.progress (§5/F4). -->
+    <string name="browser_default_progress">Hermes está navegando…</string>
+
+    <!-- Velo durante un comando en curso (§5/F4); el detalle llega por browser.progress. -->
+    <string name="browser_wait">Un momento…</string>
+
+    <!-- Botón Parar: session.interrupt + cancelación del comando en curso (§5/F4). -->
+    <string name="browser_stop">Parar</string>
+    <string name="browser_stop_cd">Parar a Hermes</string>
+
+    <!-- Botón inferior: vuelve al chat sin soltar el registro del controlador (§5/F4). -->
+    <string name="browser_back_to_chat">Volver al chat</string>
+
+    <!-- Estado RegistrationFailed (red u otro error del servidor que no es 4403). -->
+    <string name="browser_registration_failed">No puedo abrir el navegador ahora mismo. Vuelve al chat y prueba de nuevo.</string>
+
+    <!-- contentDescription del WebView (el contenido web conserva su árbol de accesibilidad). -->
+    <string name="browser_webview_cd">Página web que Hermes está usando</string>
 </resources>

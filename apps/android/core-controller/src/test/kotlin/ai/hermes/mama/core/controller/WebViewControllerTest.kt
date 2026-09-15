@@ -417,6 +417,76 @@ class WebViewControllerTest {
             testScheduler.advanceUntilIdle()
         }
 
+    // ---------------------------------------------------------- busy (F4) --
+
+    @Test
+    fun `busy esta a true mientras un comando corre y vuelve a false al terminar`() =
+        runTest {
+            val (controller, fake) = newController()
+            fake.responder =
+                responder { script ->
+                    if (script.contains("click(")) {
+                        FakeWebView.jsResult("""{"success":true,"clicked":"@e1"}""")
+                    } else {
+                        null
+                    }
+                }
+            assertFalse(controller.busy.value)
+            val deferred = async { controller.execute(BrowserCommand.Click("c1", "@e1")) }
+            testScheduler.runCurrent()
+            // El comando ya está en inflight (aunque el job aún no haya corrido).
+            assertTrue(controller.busy.value)
+            testScheduler.advanceUntilIdle()
+            assertTrue(deferred.await().ok)
+            assertFalse(controller.busy.value)
+        }
+
+    @Test
+    fun `busy se apaga cuando el comando se cancela`() =
+        runTest {
+            val (controller, fake) = newController()
+            // El __hermes.click nunca responde: el comando queda en curso hasta el cancel.
+            fake.responder = { script ->
+                if (script.startsWith("window.__hermes.")) {
+                    awaitCancellation()
+                } else {
+                    "null"
+                }
+            }
+            val deferred = async { controller.execute(BrowserCommand.Click("c1", "@e1")) }
+            testScheduler.runCurrent()
+            assertTrue(controller.busy.value)
+            controller.cancelAll()
+            testScheduler.advanceUntilIdle()
+            assertFalse(deferred.await().ok)
+            assertFalse(controller.busy.value)
+        }
+
+    @Test
+    fun `busy refleja comandos encolados hasta que todos terminan`() =
+        runTest {
+            val (controller, fake) = newController()
+            fake.responder = { script ->
+                if (script.startsWith("window.__hermes.")) {
+                    awaitCancellation()
+                } else {
+                    "null"
+                }
+            }
+            val a = async { controller.execute(BrowserCommand.Click("c1", "@e1")) }
+            val b = async { controller.execute(BrowserCommand.Press("c2", "Enter")) }
+            testScheduler.runCurrent()
+            assertTrue(controller.busy.value, "encolado también cuenta como en curso")
+            controller.cancel("c1")
+            testScheduler.runCurrent()
+            assertTrue(controller.busy.value, "c2 sigue vivo tras cancelar c1")
+            controller.cancelAll()
+            testScheduler.advanceUntilIdle()
+            assertFalse(a.await().ok)
+            assertFalse(b.await().ok)
+            assertFalse(controller.busy.value)
+        }
+
     @Test
     fun `execute con scope ya cancelado devuelve fallo en vez de colgar`() =
         runTest {
