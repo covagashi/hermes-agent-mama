@@ -147,6 +147,8 @@ dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
     implementation(project(":core-controller"))
+    // C4: el host dev (DevChatHost) monta SessionRepository + Room por generación.
+    implementation(project(":core-storage"))
     implementation(project(":core-ui"))
     implementation(project(":feature-chat"))
     implementation(project(":feature-browser"))
@@ -155,10 +157,13 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coroutines.android)
+    implementation(libs.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.timber)
     // El verifier de C2 (feature-settings) expone OkHttpClient/HttpUrl en su firma.
     implementation(libs.okhttp)

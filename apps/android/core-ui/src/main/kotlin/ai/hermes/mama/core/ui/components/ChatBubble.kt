@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -35,15 +36,56 @@ import androidx.compose.ui.unit.dp
  * Burbuja de chat (mockup Chat): texto 19 sp, radio 20 dp con la esquina
  * "propia" a 6 dp. Las burbujas de Hermes pueden llevar el botón 🔊
  * ([onListenClick]): su zona táctil es ≥ 56 dp aunque el círculo visible es
- * 44 dp como en el mockup.
+ * 44 dp como en el mockup. [isError] pinta la burbuja con los colores de
+ * error (un `message.complete` fallido, C4).
  */
 @Composable
 fun ChatBubble(
     text: String,
     author: ChatBubbleAuthor,
     modifier: Modifier = Modifier,
+    isError: Boolean = false,
     onListenClick: (() -> Unit)? = null,
     listenContentDescription: String? = null,
+) {
+    ChatBubbleFrame(author = author, modifier = modifier, isError = isError) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        ListenRow(author = author, onListenClick = onListenClick, listenContentDescription = listenContentDescription)
+    }
+}
+
+/**
+ * Variante con [AnnotatedString] (Markdown renderizado por C4: negritas,
+ * listas, enlaces, código monoespaciado). Mismo marco que la de texto plano.
+ */
+@Composable
+fun ChatBubble(
+    text: AnnotatedString,
+    author: ChatBubbleAuthor,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    onListenClick: (() -> Unit)? = null,
+    listenContentDescription: String? = null,
+) {
+    ChatBubbleFrame(author = author, modifier = modifier, isError = isError) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        ListenRow(author = author, onListenClick = onListenClick, listenContentDescription = listenContentDescription)
+    }
+}
+
+/** Marco de la burbuja (forma, alineación y colores); el contenido va dentro. */
+@Composable
+private fun ChatBubbleFrame(
+    author: ChatBubbleAuthor,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    content: @Composable () -> Unit,
 ) {
     val isUser = author == ChatBubbleAuthor.User
     val scheme = MaterialTheme.colorScheme
@@ -70,9 +112,19 @@ fun ChatBubble(
                     bottomEnd = if (isUser) MamaDimens.BubbleOwnCorner else MamaDimens.BubbleCorner,
                     bottomStart = if (isUser) MamaDimens.BubbleCorner else MamaDimens.BubbleOwnCorner,
                 ),
-            color = if (isUser) scheme.primaryContainer else scheme.surface,
-            contentColor = scheme.onBackground,
-            border = if (isUser) null else BorderStroke(1.dp, scheme.outline),
+            color =
+                when {
+                    isError -> scheme.errorContainer
+                    isUser -> scheme.primaryContainer
+                    else -> scheme.surface
+                },
+            contentColor = if (isError) scheme.onErrorContainer else scheme.onBackground,
+            border =
+                if (isUser || isError) {
+                    null
+                } else {
+                    BorderStroke(1.dp, scheme.outline)
+                },
         ) {
             Column(
                 modifier =
@@ -82,25 +134,32 @@ fun ChatBubble(
                     ),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                if (!isUser && onListenClick != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        ListenButton(
-                            onClick = onListenClick,
-                            contentDescription =
-                                listenContentDescription
-                                    ?: stringResource(R.string.design_listen_message),
-                        )
-                    }
-                }
+                content()
             }
         }
+    }
+}
+
+/** La fila del botón 🔊: sólo en burbujas de Hermes con [onListenClick]. */
+@Composable
+private fun ListenRow(
+    author: ChatBubbleAuthor,
+    onListenClick: (() -> Unit)?,
+    listenContentDescription: String?,
+) {
+    if (author == ChatBubbleAuthor.User || onListenClick == null) {
+        return
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        ListenButton(
+            onClick = onListenClick,
+            contentDescription =
+                listenContentDescription
+                    ?: stringResource(R.string.design_listen_message),
+        )
     }
 }
 

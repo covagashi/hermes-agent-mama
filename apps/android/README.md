@@ -52,7 +52,9 @@ adb shell am start -n ai.hermes.mama.dev/ai.hermes.mama.MainActivity --es fake_s
 
 Con el extra `fake_script` presente, `DevGateway` (`app/…/DevGateway.kt`) registra
 `ws://10.0.2.2:8399` como endpoint en lugar de las credenciales guardadas en la
-pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
+pantalla Conexión, y `MainActivity` monta `DevChatHost` (C4): la pantalla Chat
+contra el guion activo, con `ConnectionManager` + Room reales. En el flavor
+`mama` el mecanismo está inerte.
 
 ### Guiones disponibles (`testing/scripts/`)
 
@@ -72,6 +74,7 @@ pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
 | `rate_limited` | Todo login → 429 con `Retry-After` (pantalla de rate limit) |
 | `renombra` | El servidor renombra el chat a mitad de turno (`session.title` + `sessions.changed`) |
 | `request_cancel` | `request.cancel` por timeout de la `srq` o por `cancel_request` del guion |
+| `c4_chat` | Streaming pausado (status + `web_search` + deltas) para el test instrumentado de C4 |
 | `sesiones` | Seeds viva (delete → 4023) y stored-only (borrable hasta `session.resume`) |
 | `ticket_requerido` | `require_ws_ticket`: `/api/ws` sin ticket → cierre 4401 tras el upgrade |
 

@@ -53,6 +53,7 @@ dependencies {
     implementation(project(":core-contract"))
     implementation(project(":core-gateway"))
     // C3: la lista de Chats se alimenta de SessionRepository (Room + red).
+    // C4: ChatViewModel consume SessionRepository/entities (transcript + liveTurn).
     implementation(project(":core-storage"))
     implementation(project(":core-ui"))
     // C7: el micrófono de la tarjeta de pregunta usa SpeechInput (D1).
@@ -83,6 +84,11 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
+    // C4: ChatViewModelTest habla con el FakeGateway REAL por loopback WS
+    // (ConnectionManager + WebSocket + Room in-memory, todo de producción).
+    testImplementation(project(":testing"))
+    testImplementation(libs.okhttp)
+    testImplementation(libs.androidx.room.runtime)
     // E2: el path android.net.Uri/ContentResolver de FileAttacher se prueba con
     // Robolectric (JUnit4); la lógica pura corre con JUnit 5 sin Android.
     testImplementation(libs.junit4)
@@ -113,6 +119,8 @@ dependencies {
     // dispositivo) + la tarjeta real en Compose (misma pila que los tests JVM).
     // C3: instrumentación de la pantalla Chats — host propio (ChatsTestActivity)
     // y FakeGateway en proceso, sin red real (misma pila que feature-browser).
+    // C4: streaming E2E en emulador — FakeGateway in-process por ws://127.0.0.1
+    // con ConnectionManager + Room reales (guion c4_chat en testing/scripts/).
     androidTestImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.ext.junit)
@@ -120,8 +128,9 @@ dependencies {
     androidTestImplementation(libs.androidx.activity.compose)
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.kotlinx.serialization.json)
-    // WebSocketTransport expone tipos okhttp en su firma (CookieJar/OkHttpClient).
+    // WebViewController/transport exponen tipos okhttp (CookieJar/OkHttpClient).
     androidTestImplementation(libs.okhttp)
+    androidTestImplementation(libs.androidx.room.runtime)
     androidTestImplementation(project(":testing"))
     // §7.1: AccessibilityChecks también en el instrumentado (espresso → ATF).
     androidTestImplementation(libs.espresso.core)

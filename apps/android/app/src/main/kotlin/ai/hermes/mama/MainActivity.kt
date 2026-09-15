@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -41,6 +42,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -53,7 +55,9 @@ import timber.log.Timber
  * C8 lo trasladará al logo real de Chats cuando exista la navegación.
  *
  * En `dev` con `fake_script` (DevGateway) no hace falta Conexión: el endpoint
- * del FakeGateway sustituye a las credenciales (runbook B5).
+ * del FakeGateway sustituye a las credenciales y monta el host de desarrollo
+ * [DevChatHost] (C4) — la pantalla Chat contra el FakeGateway standalone
+ * (runbook B5).
  */
 class MainActivity : ComponentActivity() {
     // Dispatcher como propiedad (InjectDispatcher): el scope vive lo que viva
@@ -62,6 +66,7 @@ class MainActivity : ComponentActivity() {
     private val appScope = CoroutineScope(SupervisorJob() + mainDispatcher)
     private lateinit var secureStore: SecureStore
     private lateinit var settings: DataStoreConnectionSettings
+    private var devHost: DevChatHost? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,28 +76,55 @@ class MainActivity : ComponentActivity() {
         // Application para que C8 lo reutilice en la sesión real.
         secureStore = (application as HermesMamaApp).secureStore
         settings = DataStoreConnectionSettings(applicationContext, appScope, secureStore)
+        val endpoint = DevGateway.endpointOverride
+        if (endpoint != null) {
+            devHost =
+                DevChatHost(
+                    context = applicationContext,
+                    endpoint = endpoint,
+                    logger = Timber::w,
+                ).also { it.start() }
+        }
         enableEdgeToEdge()
         setContent {
             MamaTheme {
-                // null = comprobando credenciales; true = pantalla Conexión.
-                var showConnection by remember { mutableStateOf<Boolean?>(null) }
-                LaunchedEffect(Unit) {
-                    showConnection =
-                        DevGateway.endpointOverride == null && !settings.hasCredentials()
-                }
-                when (showConnection) {
-                    null -> ChatsPlaceholder(onUnlock = {})
-                    true ->
-                        ConnectionEntry(
-                            onDone = {
-                                // "Guardar y empezar" OK: a Chats (C3+ pondrá la real).
-                                showConnection = false
-                            },
-                        )
-                    false -> ChatsPlaceholder(onUnlock = { showConnection = true })
+                val host = devHost
+                if (host != null) {
+                    // Dev: Chat directo contra el FakeGateway, sin Conexión.
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                            DevChatScreen(host = host, onBack = { finish() })
+                        }
+                    }
+                } else {
+                    // null = comprobando credenciales; true = pantalla Conexión.
+                    var showConnection by remember { mutableStateOf<Boolean?>(null) }
+                    LaunchedEffect(Unit) {
+                        showConnection = !settings.hasCredentials()
+                    }
+                    when (showConnection) {
+                        null -> ChatsPlaceholder(onUnlock = {})
+                        true ->
+                            ConnectionEntry(
+                                onDone = {
+                                    // "Guardar y empezar" OK: a Chats (C3+ pondrá la real).
+                                    showConnection = false
+                                },
+                            )
+                        false -> ChatsPlaceholder(onUnlock = { showConnection = true })
+                    }
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val host = devHost ?: return
+        devHost = null
+        // No en lifecycleScope: super.onDestroy() ya lo ha cancelado y el
+        // launch sería no-op — el host limpia sobre su scope propio.
+        host.stop()
     }
 
     // Si en el futuro la activity pasa a singleTask/singleTop, el arranque

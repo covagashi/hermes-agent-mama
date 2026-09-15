@@ -1,0 +1,59 @@
+{
+ "name": "c4_chat",
+ "description": "Turno de streaming con pausas largas: para el test instrumentado de C4 (chip, 'escribiendo' y deltas visibles con margen de aserción).",
+ "auth": {
+  "username": "usuario",
+  "password": "mama"
+ },
+ "replay_epoch": "epoch-c4-1",
+ "sessions": [],
+ "turns": [
+  {
+   "steps": [
+    {
+     "event": "message.start"
+    },
+    {
+     "event": "status.update",
+     "payload": {
+      "kind": "loop",
+      "text": "Hermes está escribiendo…"
+     }
+    },
+    {
+     "delta": "Estoy buscando "
+    },
+    {
+     "sleep_ms": 400
+    },
+    {
+     "tool": {
+      "name": "web_search",
+      "context": "Buscando en internet",
+      "summary": "3 resultados",
+      "sleep_ms": 1200
+     }
+    },
+    {
+     "delta": "tu factura."
+    },
+    {
+     "sleep_ms": 400
+    },
+    {
+     "event": "status.update",
+     "payload": {
+      "kind": "loop",
+      "text": ""
+     }
+    },
+    {
+     "event": "message.complete",
+     "payload": {
+      "status": "complete"
+     }
+    }
+   ]
+  }
+ ]
+}

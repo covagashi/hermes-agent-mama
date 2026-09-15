@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- usesCleartextTraffic: el FakeGateway empotrado sirve ws://localhost en
-         los tests (C7, igual que MockWebServer en feature-browser). -->
+    <!-- usesCleartextTraffic: el FakeGateway in-process sirve ws://127.0.0.1 en
+         los tests instrumentados (C4/C7, igual que F2 con MockWebServer). -->
     <application android:usesCleartextTraffic="true">
-        <!-- Host de createAndroidComposeRule<ComponentActivity> en los tests
-             instrumentados (C7); sin declararla el intent MAIN/LAUNCHER no
-             resuelve y el proceso de test muere. -->
+        <!-- Host de createAndroidComposeRule<ComponentActivity>; sin declararla
+             el intent MAIN/LAUNCHER no resuelve y el proceso de test muere. -->
         <activity
             android:name="androidx.activity.ComponentActivity"
             android:exported="true" />

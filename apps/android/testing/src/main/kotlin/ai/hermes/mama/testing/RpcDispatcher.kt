@@ -2,6 +2,7 @@ package ai.hermes.mama.testing
 
 import ai.hermes.mama.testing.FakeGateway.Companion.str
 import ai.hermes.mama.testing.FakeGatewayScript.TurnScript
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -312,6 +313,11 @@ internal class RpcDispatcher(
         val text = promptText(params["text"])
         val turn = gateway.script.turnFor(text) ?: FALLBACK_TURN
         turn.submitError?.let { throw RpcErrorException(it.code, it.message) }
+        // `submit_delay_ms`: latencia del servidor antes de aceptar el submit —
+        // la fila `user` aún no existe y la app muestra su burbuja optimista.
+        if (turn.submitDelayMs > 0) {
+            delay(turn.submitDelayMs)
+        }
 
         val rowId = session.messageCount() + 1L
         session.addMessage(
