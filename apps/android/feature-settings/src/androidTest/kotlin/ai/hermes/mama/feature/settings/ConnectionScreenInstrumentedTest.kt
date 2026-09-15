@@ -67,7 +67,7 @@ class ConnectionScreenInstrumentedTest {
     // ---- casos del roadmap ----
 
     @Test
-    fun `credenciales correctas - guardar navega a Chats y persiste`() {
+    fun credenciales_correctas_guardar_navega_a_Chats_y_persiste() {
         val gateway = startGateway()
         val settings = freshSettings()
 
@@ -83,7 +83,7 @@ class ConnectionScreenInstrumentedTest {
     }
 
     @Test
-    fun `contrasena incorrecta muestra el mensaje humano`() {
+    fun contrasena_incorrecta_muestra_el_mensaje_humano() {
         val gateway = startGateway()
         setScreen(freshSettings())
         fillFields(server = gateway.httpUrl, username = "usuario", password = "mala")
@@ -94,7 +94,7 @@ class ConnectionScreenInstrumentedTest {
     }
 
     @Test
-    fun `servidor caido muestra el mensaje humano`() {
+    fun servidor_caido_muestra_el_mensaje_humano() {
         // Puerto 1 del propio loopback: refused inmediato, sin timeout largo.
         setScreen(freshSettings())
         fillFields(server = "http://127.0.0.1:1", username = "usuario", password = "mama")
@@ -105,7 +105,7 @@ class ConnectionScreenInstrumentedTest {
     }
 
     @Test
-    fun `probar con credenciales correctas muestra el banner conectado`() {
+    fun probar_con_credenciales_correctas_muestra_el_banner_conectado() {
         val gateway = startGateway()
         setScreen(freshSettings())
         fillFields(server = gateway.httpUrl, username = "usuario", password = "mama")
@@ -117,7 +117,7 @@ class ConnectionScreenInstrumentedTest {
     }
 
     @Test
-    fun `el ojo de la contrasena alterna visibilidad`() {
+    fun el_ojo_de_la_contrasena_alterna_visibilidad() {
         setScreen(freshSettings())
         composeRule
             .onNodeWithContentDescription("Mostrar contraseña")
@@ -127,7 +127,7 @@ class ConnectionScreenInstrumentedTest {
     }
 
     @Test
-    fun `el toggle de voz se persiste en los ajustes`() {
+    fun el_toggle_de_voz_se_persiste_en_los_ajustes() {
         val settings = freshSettings()
         setScreen(settings)
         composeRule.onNodeWithText("Leer las respuestas en voz alta").assertExists()
