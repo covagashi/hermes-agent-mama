@@ -163,8 +163,18 @@ jobs:
             echo "La release $TAG ya existe → se re-adjuntan los artefactos."
             gh release upload "$TAG" app-mama-release.apk app-mama-release.aab --clobber
           else
+            # Sin firma release real (fallback debug) la Release se marca
+            # --prerelease y lo dice el título: cada build debug lleva una
+            # clave distinta y "instalar encima" no conservaría los chats.
+            EXTRA_FLAGS=()
+            TITLE_SUFFIX=""
+            if [ "${{ steps.signing.outputs.available }}" != "true" ]; then
+              EXTRA_FLAGS+=(--prerelease)
+              TITLE_SUFFIX=" — firma de depuración, sin Play"
+            fi
             gh release create "$TAG" app-mama-release.apk app-mama-release.aab \
-              --title "Hermes para mamá ($TAG)" \
+              --title "Hermes para mamá ($TAG)$TITLE_SUFFIX" \
               --verify-tag \
-              --generate-notes
+              --generate-notes \
+              "${EXTRA_FLAGS[@]}"
           fi
