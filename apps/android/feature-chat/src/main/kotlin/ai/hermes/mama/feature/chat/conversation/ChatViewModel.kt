@@ -207,6 +207,7 @@ class ChatViewModel(
 
     /** Envía el texto del composer (burbuja optimista + `prompt.submit`). */
     fun send(text: String) {
+        warn("send() len=${text.length}")
         if (text.isBlank()) {
             return
         }

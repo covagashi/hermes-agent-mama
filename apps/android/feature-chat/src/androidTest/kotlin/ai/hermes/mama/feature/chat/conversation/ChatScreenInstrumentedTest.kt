@@ -14,15 +14,19 @@ import ai.hermes.mama.testing.FakeGatewayScript
 import android.content.Context
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.printToLog
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -128,6 +132,20 @@ class ChatScreenInstrumentedTest {
                     .assertIsEnabled()
             }.isSuccess
         }
+        // Diagnóstico CI: si el click no dispara, el log muestra cuántos nodos
+        // casan con el contentDescription, si llevan OnClick y su bounds.
+        val sendMatches =
+            composeRule
+                .onAllNodesWithContentDescription(string(R.string.chat_send))
+                .fetchSemanticsNodes()
+        Log.w(
+            TAG,
+            "send node: ${sendMatches.size} match(es): " +
+                sendMatches.joinToString { n ->
+                    "id=${n.id} click=${SemanticsActions.OnClick in n.config} bounds=${n.boundsInRoot}"
+                },
+        )
+        composeRule.onRoot().printToLog(TAG)
         composeRule.onNodeWithContentDescription(string(R.string.chat_send)).performClick()
 
         // Burbuja de la usuaria (optimista → fila real tras el submit).
