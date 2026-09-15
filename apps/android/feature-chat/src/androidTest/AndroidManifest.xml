@@ -3,5 +3,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- usesCleartextTraffic: el FakeGateway empotrado sirve ws://localhost en
          los tests (C7, igual que MockWebServer en feature-browser). -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- Host de createAndroidComposeRule<ComponentActivity> en los tests
+             instrumentados (C7); sin declararla el intent MAIN/LAUNCHER no
+             resuelve y el proceso de test muere. -->
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true" />
+    </application>
 </manifest>
