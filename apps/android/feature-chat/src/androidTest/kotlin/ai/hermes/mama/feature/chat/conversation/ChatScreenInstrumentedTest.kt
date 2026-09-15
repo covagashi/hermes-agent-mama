@@ -14,6 +14,7 @@ import ai.hermes.mama.testing.FakeGatewayScript
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -105,8 +106,16 @@ class ChatScreenInstrumentedTest {
 
     @Test
     fun streaming_chip_y_complete_se_ven_en_pantalla() {
-        // La usuaria escribe y envía.
+        // La usuaria escribe y envía. El botón queda deshabilitado hasta que
+        // el texto llega al estado — un performClick inmediato puede ser no-op.
         composeRule.onNode(hasSetTextAction()).performTextInput("hola")
+        composeRule.waitUntil(timeoutMillis = WAIT_MS) {
+            runCatching {
+                composeRule
+                    .onNodeWithContentDescription(string(R.string.chat_send))
+                    .assertIsEnabled()
+            }.isSuccess
+        }
         composeRule.onNodeWithContentDescription(string(R.string.chat_send)).performClick()
 
         // Burbuja de la usuaria (optimista → fila real tras el submit).
