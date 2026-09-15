@@ -142,10 +142,7 @@ class BrowserScreenInstrumentedTest {
 
             val created =
                 composeRule.runOnUiThread {
-                    AndroidWebViewDriver(
-                        composeRule.activity,
-                        windowProvider = { composeRule.activity.window },
-                    )
+                    AndroidWebViewDriver(composeRule.activity)
                 }
             driver = created
             val executor = WebViewController(created, scope)

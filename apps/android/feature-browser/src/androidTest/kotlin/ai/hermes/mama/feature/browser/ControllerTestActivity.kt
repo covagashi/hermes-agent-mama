@@ -5,8 +5,8 @@ import android.os.Bundle
 
 /**
  * Activity mínima que hospeda el [AndroidWebViewDriver] bajo test (F2): la
- * vista del driver ocupa toda la pantalla para que `PixelCopy`/`draw` tengan
- * superficie real y `onPageFinished`/recursos lleguen como en producción.
+ * vista del driver ocupa toda la pantalla para que `draw` tenga superficie
+ * real y `onPageFinished`/recursos lleguen como en producción.
  */
 class ControllerTestActivity : Activity() {
     lateinit var driver: AndroidWebViewDriver
@@ -14,7 +14,7 @@ class ControllerTestActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        driver = AndroidWebViewDriver(this, windowProvider = { window })
+        driver = AndroidWebViewDriver(this)
         setContentView(driver.webView)
     }
 

@@ -334,6 +334,12 @@ class WsConnection internal constructor(
                     },
                 )
             }
+        // El broker real elimina el scope del controlador al morir el socket:
+        // un registro colgado apuntaría a una conn muerta y `awaitController`
+        // la devolvería (los comandos se perderían hasta timeout).
+        gateway.store.sessions.values.forEach { session ->
+            session.controllers.values.removeIf { it.conn === this }
+        }
     }
 
     private companion object {

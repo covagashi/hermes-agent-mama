@@ -136,8 +136,13 @@ public class WebViewController(
         return try {
             outcome.await()
         } finally {
-            inflight.remove(command.commandId, job)
-            mutableBusy.value = inflight.isNotEmpty()
+            // Atómico: con dos execute() en paralelo, un isNotEmpty() leído
+            // antes del remove del otro sobrescribiría su busy=false (velo
+            // atascado). El par remove+lectura va bajo el mismo monitor.
+            synchronized(inflight) {
+                inflight.remove(command.commandId, job)
+                mutableBusy.value = inflight.isNotEmpty()
+            }
             // El llamador se fue (cancelaron su corrutina): el trabajo no queda huérfano.
             if (!outcome.isCompleted) {
                 job.cancel()

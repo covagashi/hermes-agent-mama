@@ -75,7 +75,7 @@ class BrowserPaneController(
      */
     val uiState: StateFlow<BrowserPaneState> =
         combine(session.state, executor.busy, progress, noticeVisible, ::paneState)
-            .stateIn(scope, SharingStarted.Eagerly, BrowserPaneState())
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), BrowserPaneState())
 
     /**
      * Abrir la pantalla: pide el controlador para [sessionId] (idempotente —
@@ -163,6 +163,12 @@ class BrowserPaneController(
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
                     collectProgress(client)
                 }
+            // Carrera con stop(): una emisión en vuelo puede lanzar el
+            // colector DESPUÉS de eventsJob=null — abortarlo al instante.
+            if (!started.get()) {
+                eventsJob?.cancel()
+                eventsJob = null
+            }
         }
     }
 

@@ -205,6 +205,13 @@ class BrowserPaneControllerTest {
                 }
             }
             awaitReal { pane.uiState.first { it.commandInFlight } }
+            // busy sube antes de que el comando llegue a loadUrl (salto de
+            // dispatcher): esperar a que la navegación lenta aterrice.
+            awaitReal {
+                while (webView.loadedUrls.lastOrNull()?.endsWith("/lenta") != true) {
+                    delay(POLL_MS)
+                }
+            }
             assertTrue(
                 webView.loadedUrls.last().endsWith("/lenta"),
                 "el comando en curso es la navegación lenta",
