@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -479,7 +480,9 @@ private fun MamaSwitch(
         Box(
             modifier =
                 Modifier
-                    .offset(x = thumbOffset)
+                    // Overload lambda: thumbOffset es State — con offset(x=…)
+                    // cada frame de la animación recompone (lint).
+                    .offset { IntOffset(x = thumbOffset.roundToPx(), y = 0) }
                     .padding(4.dp)
                     .size(28.dp)
                     .background(scheme.surface, CircleShape),
