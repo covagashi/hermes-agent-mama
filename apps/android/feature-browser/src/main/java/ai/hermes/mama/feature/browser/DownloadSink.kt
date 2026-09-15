@@ -73,13 +73,20 @@ class MediaStoreDownloadSink(
                     resolver.openOutputStream(uri)
                         ?: throw IOException("MediaStore no abrió el fichero")
                 val written = out.use(write)
-                resolver.update(
-                    uri,
-                    ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
-                    null,
-                    null,
-                )
-                SavedDownload(displayNameOf(uri) ?: fileName, uri.toString(), written)
+                val published =
+                    resolver.update(
+                        uri,
+                        ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
+                        null,
+                        null,
+                    )
+                if (published <= 0) {
+                    throw IOException("MediaStore no publicó la descarga")
+                }
+                // La fila ya es válida: si el query del nombre final falla no
+                // debe caer al catch (borraría un fichero bien publicado).
+                val finalName = runCatching { displayNameOf(uri) }.getOrNull() ?: fileName
+                SavedDownload(finalName, uri.toString(), written)
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: Exception,
             ) {

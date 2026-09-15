@@ -5,4 +5,14 @@
     <!-- §5/G1: aviso «Descarga terminada». En API 33+ es runtime: si la usuaria
          no lo concede el aviso no sale y la descarga funciona igual. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Sin este bloque, en API 30+ `resolveActivity`/`queryIntentActivities`
+         no ven los visores de documentos: «Abrir» y el toque de la
+         notificación quedarían siempre muertos aunque haya apps instaladas. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" android:mimeType="*/*" />
+        </intent>
+    </queries>
 </manifest>

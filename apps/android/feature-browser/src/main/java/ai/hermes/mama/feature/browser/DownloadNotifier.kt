@@ -31,7 +31,9 @@ class DownloadNotifier(
         }
         runCatching {
             ensureChannel(manager)
-            manager.notify(NOTIFICATION_ID, buildNotification(doc))
+            // Una notificación por documento (id derivado de la content-uri):
+            // dos descargas seguidas no se pisan entre sí.
+            manager.notify(doc.contentUri.hashCode(), buildNotification(doc))
         }.onFailure { warn("notificación de descarga falló (${it::class.simpleName})") }
     }
 
@@ -78,7 +80,6 @@ class DownloadNotifier(
 
     private companion object {
         const val CHANNEL_ID = "downloads"
-        const val NOTIFICATION_ID = 41
         const val REQUEST_OPEN = 42
     }
 }

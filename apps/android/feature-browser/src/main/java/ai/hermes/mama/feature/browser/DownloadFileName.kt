@@ -210,7 +210,10 @@ internal object DownloadFileName {
                 bytes.write(hex)
                 i += PERCENT_SEQUENCE_LEN
             } else {
-                bytes.write(c.code and BYTE_MASK)
+                // Un char no-ASCII literal (p. ej. «é» en un path que el
+                // WebView ya pasó decodificado) se escribe como sus bytes
+                // UTF-8 — `c.code and 0xFF` lo truncaría a U+FFFD al decodificar.
+                bytes.write(c.toString().toByteArray(Charsets.UTF_8))
                 i += 1
             }
         }
@@ -244,6 +247,5 @@ internal object DownloadFileName {
 
     private const val HEX_RADIX = 16
     private const val PERCENT_SEQUENCE_LEN = 3
-    private const val BYTE_MASK = 0xFF
     private const val MAX_EXTENSION_CHARS = 5
 }

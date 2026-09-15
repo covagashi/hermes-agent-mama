@@ -10,7 +10,7 @@ import java.util.Locale
  * - [modelLine]: la nota para el modelo, en inglés y con el formato exacto del
  *   roadmap («Downloaded file saved on the user's phone: factura.pdf
  *   (application/pdf, 123 KB)»). Viaja en el `browser.controller.result` del
- *   comando en curso si lo hay, y siempre dentro del `prompt.submit`
+ *   comando en curso si lo hay; si no, dentro del `prompt.submit`
  *   (`display_kind:"system"`) — ver [DownloadReporter].
  * - [sessionMessage]: una sola `prompt.submit` que lleva los dos — así el
  *   modelo recibe su línea exacta aunque ningún comando esté en vuelo.

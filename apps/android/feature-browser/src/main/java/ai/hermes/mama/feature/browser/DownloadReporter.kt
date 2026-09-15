@@ -17,12 +17,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Por cada descarga:
  * 1. Si hay un comando §2.6 en curso, la nota del modelo (en inglés, formato
  *    exacto del roadmap) viaja en su `browser.controller.result` vía
- *    [WebViewController.queueResultNote] — es el canal preferido del roadmap.
- * 2. Siempre, `prompt.submit` con `display_kind:"system"` y
- *    [DownloadNotice.sessionMessage] (el aviso visible en español + la línea
- *    para el modelo): con el canal anterior no disponible es el fallback que
- *    el roadmap permite, y con él disponible deja el mensaje visible en el
- *    chat igualmente.
+ *    [WebViewController.queueResultNote] — es el canal preferido del roadmap
+ *    y entonces el submit lleva sólo el aviso visible en español (la nota no
+ *    se duplica).
+ * 2. Siempre, `prompt.submit` con `display_kind:"system"`: con comando en
+ *    curso lleva sólo [DownloadNotice.userLine]; sin él lleva
+ *    [DownloadNotice.sessionMessage] (aviso + línea del modelo — el fallback
+ *    que el roadmap permite cuando no hay resultado al que anotarla).
  *
  * Ciclo de vida: lo decide quien crea la sesión de chat (una descarga puede
  * terminar con la pantalla Navegador cerrada — [start] NO va ligado a la
@@ -64,7 +65,10 @@ class DownloadReporter(
      */
     fun onDownloadSaved(doc: DownloadedDoc) {
         val modelLine = DownloadNotice.modelLine(doc.fileName, doc.mimeType, doc.sizeBytes)
-        if (executor.busy.value) {
+        // Con comando en vuelo la nota del modelo va en su resultado — el
+        // submit de abajo lleva entonces sólo el aviso visible (sin duplicar).
+        val inFlight = executor.busy.value
+        if (inFlight) {
             executor.queueResultNote(modelLine)
         }
         val client = currentClient ?: return warn("aviso de descarga sin gateway conectado")
@@ -73,8 +77,15 @@ class DownloadReporter(
                 client.submitPrompt(
                     sessionId = sessionId,
                     text =
-                        DownloadNotice.sessionMessage(doc.fileName, doc.mimeType, doc.sizeBytes),
+                        if (inFlight) {
+                            DownloadNotice.userLine(doc.fileName)
+                        } else {
+                            DownloadNotice.sessionMessage(doc.fileName, doc.mimeType, doc.sizeBytes)
+                        },
                     displayKind = DISPLAY_KIND_SYSTEM,
+                    // El aviso es automático, no urgente: cola pura si la sesión
+                    // está ocupada — nunca steer ni interrupt del turno vivo.
+                    queued = true,
                 )
             } catch (e: CancellationException) {
                 throw e

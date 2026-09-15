@@ -1,6 +1,7 @@
 package ai.hermes.mama.feature.browser
 
 import ai.hermes.mama.core.controller.BrowserCommand
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.webkit.CookieManager
@@ -77,15 +78,23 @@ class BrowserDownloadManager(
             Intent(Intent.ACTION_VIEW)
                 .setDataAndType(android.net.Uri.parse(doc.contentUri), doc.mimeType)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (intent.resolveActivity(appContext.packageManager) == null) {
+        // startActivity NO está filtrado por la visibilidad de paquetes: el
+        // guard correcto es ActivityNotFoundException, no resolveActivity
+        // (que devolvería null en API 30+ aunque haya visor).
+        try {
+            appContext.startActivity(intent)
+        } catch (
+            @Suppress("SwallowedException") e: ActivityNotFoundException,
+        ) {
             // Sin visor instalado: Toast claro y la hoja sigue (puede Compartir).
             Toast
                 .makeText(appContext, R.string.download_open_failed, Toast.LENGTH_LONG)
                 .show()
-            return
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: RuntimeException,
+        ) {
+            warn("abrir descarga falló (${e::class.simpleName})")
         }
-        runCatching { appContext.startActivity(intent) }
-            .onFailure { warn("abrir descarga falló (${it::class.simpleName})") }
     }
 
     /** «Compartir»: `ACTION_SEND` con chooser — el sistema lo resuelve siempre. */

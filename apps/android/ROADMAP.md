@@ -824,6 +824,15 @@ registrar controlador). Sirve para detectar drift real del backend.
     así que un refresh ingenuo lo evictaría — la app lo marca `localOnly` hasta que el servidor
     lo liste. Si el backend persistiera el draft al crear (o lo incluyera en `session.list`
     marcado como tal), el flag y la excepción del refresh desaparecerían.
+11. **`display_kind:"system"` no lo honra el backend** (encontrado en G1): el contrato admite el
+    campo y `prompt.submit` lo acepta, pero `tui_gateway` sólo honra `"hidden"` — cualquier otro
+    valor se pinta como fila de la usuaria y encola un turno. El aviso de descarga de G1 funciona
+    (la fila se ve y el modelo recibe el texto), pero la semántica «de sistema» — visible sin
+    figurar como mensaje de la usuaria y sin encolar turno — habría que implementarla en el
+    backend. Además, la extensión `"notes"` que G1 añade a `browser.controller.result` (notas
+    al modelo adjuntas al resultado de un comando en curso) viaja verbatim porque el broker
+    devuelve el result tal cual (§9.8), pero **no está en el contrato** — si el backend lo
+    formaliza, `apps/shared/src/gateway-contract.openrpc.json` debería recogerlo.
 
 ---
 
