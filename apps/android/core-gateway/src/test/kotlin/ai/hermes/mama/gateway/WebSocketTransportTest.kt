@@ -153,6 +153,25 @@ class WebSocketTransportTest {
         }
 
     @Test
+    fun `close concurrente completa ambos y el socket queda muerto`() =
+        runTest {
+            val srv = newServer()
+            val transport = WebSocketTransport(srv.wsUrl("/api/ws"), okHttpClient = srv.client)
+            srv.awaitSocket()
+            transport.awaitOpen()
+
+            // El perdedor del CAS (un close() ya en curso, típico el detached de
+            // JsonRpcChannel.dead) espera la muerte real del socket — acotada —
+            // en vez de volver con la TCP vieja aún drenando.
+            val first = async { transport.close() }
+            val second = async { transport.close() }
+            first.await()
+            second.await()
+
+            assertFalse(transport.isOpen)
+        }
+
+    @Test
     fun `close es idempotente completa incoming y send posterior falla`() =
         runTest {
             val srv = newServer()

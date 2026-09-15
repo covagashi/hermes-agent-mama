@@ -7,14 +7,18 @@ package ai.hermes.mama.gateway
  * por intento: así el ticket WS de un solo uso (30 s, §2.1 paso 3) se mintea
  * inmediatamente antes de cada socket — también en cada reconexión.
  *
- * §8: [url] lleva el `?ticket=…` incrustado — nunca loguearla.
+ * §8: [url] lleva el `?ticket=…` incrustado — nunca loguearla. Por eso el
+ * `toString()` está redactado: un `println(params)` accidental no puede filtrar
+ * ni el ticket ni los headers (pueden llevar credenciales).
  */
 data class ConnectParams(
     /** URL completa del socket, p. ej. `wss://hermes.example.invalid/api/ws?ticket=…`. */
     val url: String,
     /** Cabeceras HTTP extra para el upgrade (vacío por defecto). */
     val headers: Map<String, String> = emptyMap(),
-)
+) {
+    override fun toString(): String = "ConnectParams(url=<redacted>, headers=${headers.size} keys)"
+}
 
 /**
  * Abre un [Transport] por intento de conexión (permite falsear la red en tests).

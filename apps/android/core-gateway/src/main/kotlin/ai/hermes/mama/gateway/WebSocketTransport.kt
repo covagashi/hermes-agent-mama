@@ -135,6 +135,10 @@ class WebSocketTransport(
      */
     override suspend fun close() {
         if (!closeRequested.compareAndSet(false, true)) {
+            // Otro close() ya está drenando (típico: el detached de
+            // JsonRpcChannel.dead): esperar la muerte real del socket — acotada
+            // — para que el ConnectionManager no reabra con la TCP vieja viva.
+            withTimeoutOrNull(closeGrace) { closedSignal.await() }
             return
         }
         try {

@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -463,6 +464,51 @@ class ConnectionManagerTest {
         }
 
     @Test
+    fun `los scopes de generacion no se acumulan en el scope del manager`() =
+        runTest {
+            val factory = FakeFactory()
+            // Scope dedicado (hijo del test): sus children son sólo los del
+            // manager — el bucle + el scope hijo de la generación viva.
+            val managerScope =
+                CoroutineScope(
+                    backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]),
+                )
+            val manager =
+                ConnectionManager(
+                    scope = managerScope,
+                    transportFactory = factory,
+                    onBeforeConnect = {
+                        ConnectParams("wss://hermes.example.invalid/api/ws?ticket=t")
+                    },
+                    config = ReconnectConfig(jitterFraction = 0.0),
+                    channelFactory = noHeartbeatChannelFactory(),
+                )
+            manager.connect()
+            runCurrent()
+            assertIs<ConnectionState.Connected>(manager.state.value)
+
+            repeat(SCOPE_TEST_GENERATIONS) { index ->
+                factory.created[index].failIncoming(IOException("caída $index"))
+                runCurrent()
+                assertIs<ConnectionState.Reconnecting>(manager.state.value)
+                advanceTimeBy(1_000)
+                runCurrent()
+                assertIs<ConnectionState.Connected>(manager.state.value)
+            }
+
+            // Revisión #10 vuelta 2: JsonRpcChannel registra un invokeOnCompletion
+            // en el Job de su scope y descarta el handle — sin scope hijo por
+            // generación (cancelado en el finally del bucle) cada reconexión
+            // retendría un canal entero en el scope de app.
+            val children = managerScope.coroutineContext[Job]!!.children.toList()
+            assertTrue(
+                children.size <= MAX_MANAGER_CHILDREN,
+                "children=${children.size}: los scopes de generación se acumulan en el padre",
+            )
+            manager.disconnect()
+        }
+
+    @Test
     fun `connect es idempotente un solo bucle`() =
         runTest {
             val factory = FakeFactory()
@@ -652,5 +698,9 @@ class ConnectionManagerTest {
         const val REAL_WAIT_MS = 10_000L
         const val OUTAGE_MIN_ATTEMPTS = 4
         const val OUTAGE_POLL_MS = 25L
+        const val SCOPE_TEST_GENERATIONS = 3
+
+        /** Bucle + scope hijo de la generación viva: constante, sin acumulación. */
+        const val MAX_MANAGER_CHILDREN = 2
     }
 }

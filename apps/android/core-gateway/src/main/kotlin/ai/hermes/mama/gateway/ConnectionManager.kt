@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -244,22 +245,40 @@ class ConnectionManager(
                 onFrame = { text -> onFrame(text, ready) },
                 onEnd = { cause -> deadSignal.complete(cause) },
             )
+        // Scope HIJO por generación (revisión #10 vuelta 2): JsonRpcChannel
+        // registra un invokeOnCompletion sobre el Job de su scope y descarta el
+        // DisposableHandle — sobre el scope del manager cada reconexión
+        // retendría un canal entero hasta que la app muera. Aquí el handler cae
+        // en el Job hijo: al cancelarlo en el finally completa, suelta el
+        // handler y el canal es GC-able (además actúa de kill-switch para los
+        // jobs internos del canal).
+        val generationScope =
+            CoroutineScope(scope.coroutineContext + Job(scope.coroutineContext[Job]))
         val channel =
             try {
-                channelFactory.create(tapped, scope) { cause ->
+                channelFactory.create(tapped, generationScope) { cause ->
                     deadSignal.complete(cause)
                     ready.completeExceptionally(
                         ChannelClosedException("channel died before gateway.ready", cause),
                     )
                 }
             } catch (e: Throwable) {
+                generationScope.cancel()
                 closeQuietly { transport.close() }
                 throw e
             }
         return try {
-            Generation(channel, withTimeout(config.readyTimeout) { ready.await() }, deadSignal)
+            Generation(
+                channel = channel,
+                transport = transport,
+                scope = generationScope,
+                replayEpoch = withTimeout(config.readyTimeout) { ready.await() },
+                deadSignal = deadSignal,
+            )
         } catch (e: Throwable) {
+            generationScope.cancel()
             closeQuietly { channel.close() }
+            closeQuietly { transport.close() }
             throw e
         }
     }
@@ -293,7 +312,15 @@ class ConnectionManager(
             if (currentChannel === generation.channel) {
                 currentChannel = null
             }
+            // Kill-switch del scope hijo: mata reader/heartbeat/watchdog y
+            // completa el Job — el invokeOnCompletion del canal se suelta y la
+            // generación deja de ser hija del scope del manager.
+            generation.scope.cancel()
             closeQuietly { generation.channel.close() }
+            // Y se ESPERA el drenaje real del socket viejo (closeGrace acotado
+            // en WebSocketTransport.close): sin esta espera la TCP muerta
+            // convivía ~4 s con la siguiente generación ya abierta (§2.2).
+            closeQuietly { generation.transport.close() }
         }
         return death
     }
@@ -344,6 +371,8 @@ class ConnectionManager(
 
     private class Generation(
         val channel: JsonRpcChannel,
+        val transport: Transport,
+        val scope: CoroutineScope,
         val replayEpoch: String?,
         private val deadSignal: CompletableDeferred<Throwable>,
     ) {
