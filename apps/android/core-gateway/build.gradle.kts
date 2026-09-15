@@ -21,7 +21,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coroutines.core)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging.interceptor)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)

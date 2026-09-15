@@ -1,14 +1,17 @@
 package ai.hermes.mama.gateway
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
+import okhttp3.WebSocket
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -22,6 +25,7 @@ import kotlin.time.Duration
  * `MockWebServer` real en localhost: sockets de verdad, nada falseado.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@Timeout(30)
 class WebSocketTransportTest {
     private val servers = mutableListOf<WsTestServer>()
 
@@ -129,15 +133,22 @@ class WebSocketTransportTest {
     fun `awaitOpen cancelado aborta el handshake en vuelo`() =
         runTest {
             val srv = newServer()
+            srv.hangUpgrade = true // el upgrade nunca completa: la espera sigue viva al cancelar
             val transport = WebSocketTransport(srv.wsUrl("/api/ws"), okHttpClient = srv.client)
 
-            // El timeout del llamador cancela la espera: el socket muere con ella.
-            val error =
-                assertNotNull(
-                    runCatching { withTimeout(1) { transport.awaitOpen() } }
-                        .exceptionOrNull(),
-                )
-            assertIs<TimeoutCancellationException>(error)
+            val opened = CompletableDeferred<Result<WebSocket>>()
+            val openJob =
+                backgroundScope.launch {
+                    opened.complete(runCatching { transport.awaitOpen() })
+                }
+            val drained = async { runCatching { transport.incoming.collect {} } }
+            runCurrent()
+
+            // El llamador cancela la espera: el socket en vuelo se aborta con ella.
+            openJob.cancel()
+            drained.await() // onFailure ya cerró `incoming`: el socket está muerto
+            val error = assertNotNull(opened.await().exceptionOrNull())
+            assertIs<CancellationException>(error)
             assertFalse(transport.isOpen)
         }
 
@@ -184,6 +195,26 @@ class WebSocketTransportTest {
                         .exceptionOrNull(),
                 )
             assertIs<IOException>(error)
+        }
+
+    @Test
+    fun `url invalida lanza sin exponer el ticket en la excepcion`() =
+        runTest {
+            val srv = newServer()
+            val secret = "ticket=SECRETO-UNICO-123"
+            val error =
+                assertNotNull(
+                    runCatching {
+                        WebSocketTransport("ws://[url mal formada?$secret", okHttpClient = srv.client)
+                    }.exceptionOrNull(),
+                )
+            assertIs<IllegalArgumentException>(error)
+            assertFalse(
+                generateSequence<Throwable>(error) { it.cause }
+                    .mapNotNull { it.message }
+                    .any { secret in it },
+                "§8: ningún mensaje de la cadena puede llevar el ticket",
+            )
         }
 
     @Test

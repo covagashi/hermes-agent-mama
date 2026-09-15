@@ -10,6 +10,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -28,6 +30,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Crea el [JsonRpcChannel] de una generación (punto de inyección para tests:
@@ -103,33 +106,58 @@ class ConnectionManager(
     val events: SharedFlow<ConnectionEvent> = mutableEvents.asSharedFlow()
 
     private val started = AtomicBoolean(false)
-    private var loopJob: Job? = null
+    private val loopJob = AtomicReference<Job?>(null)
 
     @Volatile
     private var currentChannel: JsonRpcChannel? = null
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Arranca el bucle de conexión (idempotente). */
+    /**
+     * Arranca el bucle de conexión (idempotente). El re-check de [started] tras
+     * publicar el job cubre la carrera `connect()`/`disconnect()`: si disconnect
+     * ganó entre el CAS y el [AtomicReference.set], el job se cancela aquí y no
+     * queda un bucle zombi.
+     */
     fun connect() {
-        if (started.compareAndSet(false, true)) {
-            loopJob = scope.launch { runLoop() }
+        if (!started.compareAndSet(false, true)) {
+            return
+        }
+        val job = scope.launch { runLoop() }
+        loopJob.set(job)
+        if (!started.get()) {
+            job.cancel()
         }
     }
 
     /**
      * Cierre explícito e idempotente: para el bucle y cierra el canal actual.
      * Tras [disconnect] no hay reconexión; [connect] puede arrancar de nuevo.
+     *
+     * La instantánea de [loopJob] se toma ANTES del CAS de [started]: un
+     * [connect] posterior sólo puede ganar el CAS una vez `started` vuelve a
+     * `false`, así que cualquier job instalado tras la instantánea pertenece a
+     * una generación nueva y no se toca (se compara con `compareAndSet`). Si el
+     * job aún no está instalado (hueco CAS→set de [connect]), el re-check de
+     * `started` en [connect] lo cancela él mismo.
      */
     suspend fun disconnect() {
+        // Instantáneas ANTES del CAS: cualquier job/canal instalado después
+        // pertenece a una generación nueva de connect() y no se toca.
+        val job = loopJob.get()
+        val channel = currentChannel
         if (!started.compareAndSet(true, false)) {
             mutableState.value = ConnectionState.Disconnected
             return
         }
         // El finally del bucle cierra el canal de la generación en curso.
-        loopJob?.cancelAndJoin()
-        currentChannel?.close()
-        currentChannel = null
+        if (job != null && loopJob.compareAndSet(job, null)) {
+            job.cancelAndJoin()
+        }
+        if (currentChannel === channel) {
+            currentChannel = null
+        }
+        closeQuietly { channel?.close() }
         mutableState.value = ConnectionState.Disconnected
     }
 
@@ -142,7 +170,7 @@ class ConnectionManager(
     private suspend fun runLoop() {
         var retryStreak = 0
         var connections = 0
-        var lastError: String? = null
+        var lastError: Throwable? = null
         while (currentCoroutineContext().isActive) {
             if (retryStreak == 0 && connections == 0) {
                 mutableState.value = ConnectionState.Connecting
@@ -153,9 +181,18 @@ class ConnectionManager(
                 delay(wait)
             }
             when (val outcome = attemptConnect()) {
+                is AttemptOutcome.Fatal -> {
+                    // Error terminal (p. ej. credenciales rechazadas): sin reintentos —
+                    // la app va a la pantalla de conexión y connect() puede reintentar.
+                    mutableState.value = ConnectionState.Failed(outcome.cause)
+                    started.set(false)
+                    warn("connection attempt is fatal (${outcome.cause::class.simpleName}); stopping")
+                    return
+                }
+
                 is AttemptOutcome.Failure -> {
                     retryStreak++
-                    lastError = outcome.errorKind
+                    lastError = outcome.cause
                 }
 
                 is AttemptOutcome.Success -> {
@@ -173,16 +210,20 @@ class ConnectionManager(
     private suspend fun attemptConnect(): AttemptOutcome =
         try {
             AttemptOutcome.Success(withTimeout(config.attemptTimeout) { openGeneration() })
+        } catch (e: ConnectionFatalException) {
+            // Terminal (p. ej. ticket rechazado por credenciales): no reintentar.
+            warn("connection attempt is fatal (${e::class.simpleName})")
+            AttemptOutcome.Fatal(e)
         } catch (e: TimeoutCancellationException) {
             // Timeout del intento (propio o el readyTimeout interior): fallo reintentable.
             warn("connection attempt timed out")
-            AttemptOutcome.Failure(e::class.simpleName ?: "timeout")
+            AttemptOutcome.Failure(e)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             // Incluye Error: el bucle de reconexión no muere en silencio (§2.2).
             warn("connection attempt failed (${e::class.simpleName})")
-            AttemptOutcome.Failure(e::class.simpleName ?: "error")
+            AttemptOutcome.Failure(e)
         }
 
     /**
@@ -197,7 +238,12 @@ class ConnectionManager(
         val transport = transportFactory.connect(params)
         val deadSignal = CompletableDeferred<Throwable>()
         val ready = CompletableDeferred<String?>()
-        val tapped = TapTransport(transport) { text -> onFrame(text, ready) }
+        val tapped =
+            TapTransport(
+                delegate = transport,
+                onFrame = { text -> onFrame(text, ready) },
+                onEnd = { cause -> deadSignal.complete(cause) },
+            )
         val channel =
             try {
                 channelFactory.create(tapped, scope) { cause ->
@@ -206,13 +252,13 @@ class ConnectionManager(
                         ChannelClosedException("channel died before gateway.ready", cause),
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 closeQuietly { transport.close() }
                 throw e
             }
         return try {
             Generation(channel, withTimeout(config.readyTimeout) { ready.await() }, deadSignal)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             closeQuietly { channel.close() }
             throw e
         }
@@ -220,30 +266,36 @@ class ConnectionManager(
 
     /**
      * Generación viva: espera a su muerte y la cierra al terminar (invariante
-     * "un solo socket"). Devuelve el tipo de la causa para `lastError`.
+     * "un solo socket"). Devuelve la causa de la muerte para `lastError`.
      */
     private suspend fun runGeneration(
         generation: Generation,
         connections: Int,
-    ): String? {
+    ): Throwable? {
+        // El canal se publica ANTES de comprobar cancelación: si disconnect()
+        // ganó la carrera tras attemptConnect, el finally cierra la generación —
+        // nunca un socket huérfano sin dueño (invariante "un solo socket").
         currentChannel = generation.channel
-        mutableState.value = ConnectionState.Connected(generation.channel, generation.replayEpoch)
-        if (connections > 1) {
-            // Reconnected(replayEpoch) — §2.4: la app re-sincroniza sesiones/controlador.
-            mutableEvents.tryEmit(ConnectionEvent.Reconnected(generation.replayEpoch))
-        }
-        var deathKind: String? = null
+        var death: Throwable? = null
         try {
+            currentCoroutineContext().ensureActive()
+            mutableState.value = ConnectionState.Connected(generation.channel, generation.replayEpoch)
+            if (connections > 1) {
+                // Reconnected(replayEpoch) — §2.4: la app re-sincroniza sesiones/controlador.
+                if (!mutableEvents.tryEmit(ConnectionEvent.Reconnected(generation.replayEpoch))) {
+                    warn("events buffer full: Reconnected dropped")
+                }
+            }
             val cause = generation.awaitDead()
-            deathKind = cause::class.simpleName
-            warn("channel died ($deathKind); reconnecting")
+            death = cause
+            warn("channel died (${cause::class.simpleName}); reconnecting")
         } finally {
             if (currentChannel === generation.channel) {
                 currentChannel = null
             }
             closeQuietly { generation.channel.close() }
         }
-        return deathKind
+        return death
     }
 
     /** Cierre de limpieza: no se aborta aunque el intento esté cancelado. */
@@ -282,7 +334,11 @@ class ConnectionManager(
         ) : AttemptOutcome
 
         data class Failure(
-            val errorKind: String,
+            val cause: Throwable,
+        ) : AttemptOutcome
+
+        data class Fatal(
+            val cause: Throwable,
         ) : AttemptOutcome
     }
 
@@ -294,17 +350,36 @@ class ConnectionManager(
         suspend fun awaitDead(): Throwable = deadSignal.await()
     }
 
-    /** Lee los frames entrantes antes que el canal: `gateway.ready` no puede perderse. */
+    /**
+     * Lee los frames entrantes antes que el canal: `gateway.ready` no puede
+     * perderse. Además reporta el fin del flujo con [onEnd]: cubre la muerte
+     * por `close()` externo del canal (el lector se cancela) y cualquier cierre
+     * que no pase por `onDead` — sin ella `awaitDead` quedaría colgado y la
+     * app mostraría `Connected` eterno sobre un socket muerto.
+     */
     private class TapTransport(
         private val delegate: Transport,
         private val onFrame: (String) -> Unit,
+        private val onEnd: (Throwable) -> Unit,
     ) : Transport {
         override val incoming: Flow<String> =
-            delegate.incoming.onEach { text -> runCatching { onFrame(text) } }
+            delegate.incoming
+                .onEach { text -> runCatching { onFrame(text) } }
+                .onCompletion { cause -> runCatching { onEnd(endCause(cause)) } }
 
         override suspend fun send(text: String) = delegate.send(text)
 
         override suspend fun close() = delegate.close()
+
+        private companion object {
+            fun endCause(cause: Throwable?): Throwable =
+                when {
+                    cause == null -> ChannelClosedException("transport incoming finished")
+                    cause is CancellationException ->
+                        ChannelClosedException("channel closed", cause)
+                    else -> cause
+                }
+        }
     }
 
     private companion object {

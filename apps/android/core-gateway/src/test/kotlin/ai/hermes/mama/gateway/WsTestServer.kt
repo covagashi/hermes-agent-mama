@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import java.io.Closeable
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -37,6 +38,10 @@ class WsTestServer : Closeable {
     /** `false` → el dispatcher responde 503 al upgrade (simula red/servidor caído). */
     @Volatile
     var acceptUpgrades: Boolean = true
+
+    /** `true` → el upgrade queda colgado: el servidor nunca responde (handshake en vuelo). */
+    @Volatile
+    var hangUpgrade: Boolean = false
 
     /** Hook por socket aceptado (típico: `ws.send(readyFrame)`). */
     var onSocketOpen: (WebSocket) -> Unit = {}
@@ -74,10 +79,10 @@ class WsTestServer : Closeable {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     tickets += request.requestUrl?.queryParameter("ticket")
                     val isUpgrade = request.path?.startsWith("/api/ws") == true
-                    return if (acceptUpgrades && isUpgrade) {
-                        MockResponse().withWebSocketUpgrade(listener)
-                    } else {
-                        MockResponse().setResponseCode(HTTP_UNAVAILABLE)
+                    return when {
+                        isUpgrade && hangUpgrade -> MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                        acceptUpgrades && isUpgrade -> MockResponse().withWebSocketUpgrade(listener)
+                        else -> MockResponse().setResponseCode(HTTP_UNAVAILABLE)
                     }
                 }
             }

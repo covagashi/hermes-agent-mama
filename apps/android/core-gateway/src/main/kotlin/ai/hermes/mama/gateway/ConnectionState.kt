@@ -29,12 +29,23 @@ sealed interface ConnectionState {
     /**
      * Caída detectada: el reintento [attempt] (1 = primer reintento) se
      * ejecutará en [retryIn] (backoff con jitter ya aplicado). [lastError] es
-     * el tipo de la última causa (clase, sin mensaje — §8: nada de contenido).
+     * la última causa (la instancia — §8: nunca se loguea su `message`, así la
+     * UI puede hacer `is` sobre el tipo real, p. ej. `SessionExpired` en C2).
      */
     data class Reconnecting(
         val attempt: Int,
         val retryIn: Duration,
-        val lastError: String? = null,
+        val lastError: Throwable? = null,
+    ) : ConnectionState
+
+    /**
+     * Fallo terminal sin reintentos (p. ej. [ConnectionFatalException] lanzada
+     * por `onBeforeConnect` al rechazar el gateway las credenciales — B3): la
+     * app lleva a la usuaria a la pantalla de conexión. [ConnectionManager.connect]
+     * puede arrancar un bucle nuevo tras este estado.
+     */
+    data class Failed(
+        val cause: Throwable,
     ) : ConnectionState
 }
 
@@ -49,3 +60,15 @@ sealed interface ConnectionEvent {
         val replayEpoch: String?,
     ) : ConnectionEvent
 }
+
+/**
+ * Error irrecuperable de conexión (B2): reintentar no tiene sentido — el caso
+ * canónico es `onBeforeConnect` lanzándolo cuando el gateway rechaza las
+ * credenciales al mintear el ticket (B3: `InvalidCredentials`/`SessionExpired`
+ * se mapearán a este tipo). El [ConnectionManager] para el bucle y publica
+ * [ConnectionState.Failed]; [ConnectionManager.connect] puede reintentar tras él.
+ */
+class ConnectionFatalException(
+    message: String? = null,
+    cause: Throwable? = null,
+) : Exception(message, cause)

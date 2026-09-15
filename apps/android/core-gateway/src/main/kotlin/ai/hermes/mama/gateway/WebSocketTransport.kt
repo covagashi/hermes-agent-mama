@@ -13,6 +13,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+import okio.utf8Size
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
@@ -37,11 +38,13 @@ import kotlin.time.Duration.Companion.seconds
  *   suspende hasta `onOpen`/`onFailure` y aborta el socket si el llamador
  *   se cancela.
  *
- * §8: jamás se loguea [url] (lleva el ticket de un solo uso) ni contenido de
- * frames — sólo tipos de evento y tamaños.
+ * §8: jamás se loguea la URL (lleva el ticket de un solo uso) ni contenido de
+ * frames — sólo tipos de evento y tamaños. Por eso `url` no es propiedad
+ * pública y el `IllegalArgumentException` de `Request.Builder` (que incrusta la
+ * URL completa en su `message`) se re-lanza sanitizado.
  */
 class WebSocketTransport(
-    val url: String,
+    url: String,
     cookieJar: CookieJar = CookieJar.NO_COOKIES,
     okHttpClient: OkHttpClient? = null,
     private val headers: Map<String, String> = emptyMap(),
@@ -50,6 +53,9 @@ class WebSocketTransport(
     private val logger: (String) -> Unit = {},
 ) : Transport {
     private val client = okHttpClient ?: defaultClient(cookieJar)
+
+    /** El cliente es nuestro si no nos pasaron uno: [close] lo apaga (§8: sin fugas). */
+    private val ownsClient = okHttpClient == null
 
     private val openSignal = CompletableDeferred<WebSocket>()
     private val closedSignal = CompletableDeferred<Unit>()
@@ -64,12 +70,21 @@ class WebSocketTransport(
     private val socket: WebSocket
 
     init {
+        require(!(okHttpClient != null && cookieJar !== CookieJar.NO_COOKIES)) {
+            "cookieJar se ignora cuando pasas okHttpClient: mete el jar en ese cliente"
+        }
         val request =
-            Request
-                .Builder()
-                .url(url)
-                .apply { headers.forEach { (name, value) -> header(name, value) } }
-                .build()
+            try {
+                Request
+                    .Builder()
+                    .url(url)
+                    .apply { headers.forEach { (name, value) -> header(name, value) } }
+                    .build()
+            } catch (e: IllegalArgumentException) {
+                // §8: el message de OkHttp incrusta la URL/headers completos (ticket);
+                // se re-lanza sanitizado (sólo el tipo de la causa, nunca su mensaje).
+                throw IllegalArgumentException("invalid websocket url or headers (${e::class.simpleName})")
+            }
         socket = client.newWebSocket(request, Listener())
     }
 
@@ -102,7 +117,7 @@ class WebSocketTransport(
         if (closeRequested.get()) {
             throw ChannelClosedException("send sobre un transport cerrado")
         }
-        val pendingBytes = ws.queueSize() + text.toByteArray(Charsets.UTF_8).size
+        val pendingBytes = ws.queueSize() + text.utf8Size()
         if (pendingBytes > maxQueueBytes) {
             // El peer no drena: el canal muere y la reconexión decide (§2.2).
             throw ChannelClosedException("websocket send queue full ($pendingBytes > $maxQueueBytes bytes)")
@@ -122,16 +137,24 @@ class WebSocketTransport(
         if (!closeRequested.compareAndSet(false, true)) {
             return
         }
-        incomingFrames.close()
-        // Quien espere un handshake en vuelo sale ya, aunque lo de abajo se interrumpa.
-        openSignal.completeExceptionally(ChannelClosedException("transport closed"))
-        if (opened.get()) {
-            socket.close(NORMAL_CLOSURE_CODE, CLOSE_REASON)
-        } else {
-            socket.cancel()
-        }
-        if (withTimeoutOrNull(closeGrace) { closedSignal.await() } == null) {
-            socket.cancel()
+        try {
+            incomingFrames.close()
+            // Quien espere un handshake en vuelo sale ya, aunque lo de abajo se interrumpa.
+            openSignal.completeExceptionally(ChannelClosedException("transport closed"))
+            if (opened.get()) {
+                socket.close(NORMAL_CLOSURE_CODE, CLOSE_REASON)
+            } else {
+                socket.cancel()
+            }
+            if (withTimeoutOrNull(closeGrace) { closedSignal.await() } == null) {
+                socket.cancel()
+            }
+        } finally {
+            if (ownsClient) {
+                // El cliente lo creó este transport: apagarlo con él (precedente WsTestServer).
+                client.dispatcher.executorService.shutdown()
+                client.connectionPool.evictAll()
+            }
         }
     }
 
@@ -213,19 +236,28 @@ class WebSocketTransport(
         private const val NORMAL_CLOSURE_CODE = 1000
         private const val CLOSE_REASON = "client closing"
 
-        /** Cliente por defecto: cookies del jar, timeout de handshake y ping WS. */
+        /**
+         * Cliente por defecto: cookies del jar, timeout de handshake y ping WS.
+         * `followSslRedirects(false)` (§8): la URL lleva el ticket de un solo
+         * uso — no reemitir el upgrade (ni sus headers) a otro host.
+         */
         fun defaultClient(cookieJar: CookieJar): OkHttpClient =
             OkHttpClient
                 .Builder()
                 .cookieJar(cookieJar)
                 .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .pingInterval(PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
+                .followSslRedirects(false)
                 .build()
 
         /**
          * [TransportFactory] real: abre un [WebSocketTransport] y espera `onOpen`.
          * Si el handshake falla o la corrutina se cancela, el transport a medio
          * abrir se cierra — nunca queda un socket abierto sin dueño.
+         *
+         * OJO (B3): el [client] debe traer `connectTimeout` y `pingInterval`
+         * configurados — ver [defaultClient]; un cliente pelado no acota el
+         * handshake ni mantiene la ruta TCP/TLS dormida.
          */
         @Suppress("TooGenericExceptionCaught")
         fun factory(

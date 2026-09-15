@@ -20,6 +20,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,6 +48,7 @@ private fun readyFrame(epoch: String?) =
  * con sockets reales.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@Timeout(30)
 class ConnectionManagerTest {
     private val servers = mutableListOf<WsTestServer>()
 
@@ -180,7 +182,7 @@ class ConnectionManagerTest {
                 val retry = assertIs<ConnectionState.Reconnecting>(manager.state.value)
                 assertEquals(index + 1, retry.attempt)
                 assertEquals(wait, retry.retryIn)
-                assertEquals("IOException", retry.lastError)
+                assertIs<IOException>(retry.lastError)
                 advanceTimeBy(wait.inWholeMilliseconds)
                 runCurrent()
             }
@@ -385,6 +387,79 @@ class ConnectionManagerTest {
             advanceTimeBy(3_000)
             runCurrent()
             assertIs<ConnectionState.Reconnecting>(manager.state.value)
+        }
+
+    @Test
+    fun `cerrar el canal desde fuera provoca reconexion`() =
+        runTest {
+            val factory = FakeFactory()
+            val manager = manager(factory)
+            manager.connect()
+            runCurrent()
+            val connected = assertIs<ConnectionState.Connected>(manager.state.value)
+
+            // Un consumidor cierra el canal directamente (p. ej. GatewayClient.close
+            // de B4): el flujo entrante termina y el manager reconecta — nunca un
+            // `Connected` eterno sobre un socket muerto (revisión media #1).
+            connected.channel.close()
+            runCurrent()
+
+            val retry = assertIs<ConnectionState.Reconnecting>(manager.state.value)
+            assertEquals(1, retry.attempt)
+            assertIs<ChannelClosedException>(retry.lastError)
+
+            advanceTimeBy(1_000)
+            runCurrent()
+            assertEquals(2, factory.created.size)
+            assertIs<ConnectionState.Connected>(manager.state.value)
+        }
+
+    @Test
+    fun `onBeforeConnect fatal corta el bucle en Failed y permite reintentar`() =
+        runTest {
+            val factory = FakeFactory()
+            var calls = 0
+            val manager =
+                manager(factory) {
+                    calls++
+                    if (calls == 1) {
+                        // B3 lanzará esto cuando el gateway rechace las credenciales.
+                        throw ConnectionFatalException("ticket rechazado")
+                    }
+                    ConnectParams("wss://hermes.example.invalid/api/ws?ticket=t-$calls")
+                }
+            manager.connect()
+            runCurrent()
+
+            val failed = assertIs<ConnectionState.Failed>(manager.state.value)
+            assertIs<ConnectionFatalException>(failed.cause)
+            assertEquals(1, calls)
+            advanceTimeBy(60_000)
+            runCurrent()
+            assertEquals(1, calls, "un fallo fatal no se reintenta")
+
+            // connect() arranca un bucle nuevo tras Failed (credenciales nuevas, B3).
+            manager.connect()
+            runCurrent()
+            assertEquals(2, calls)
+            assertIs<ConnectionState.Connected>(manager.state.value)
+        }
+
+    @Test
+    fun `disconnect y connect rearranca el bucle`() =
+        runTest {
+            val factory = FakeFactory()
+            val manager = manager(factory)
+            manager.connect()
+            runCurrent()
+            assertIs<ConnectionState.Connected>(manager.state.value)
+
+            manager.disconnect()
+            manager.connect()
+            runCurrent()
+
+            assertEquals(2, factory.created.size)
+            assertIs<ConnectionState.Connected>(manager.state.value)
         }
 
     @Test
