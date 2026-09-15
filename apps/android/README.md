@@ -66,6 +66,7 @@ pantalla Conexión. En el flavor `mama` el mecanismo está inerte.
 | `browser` | Controlador de navegador: navigate + snapshot + click con `browser.controller.result` |
 | `browser_off` | `browser.enabled=false`: todo `browser.controller.*` → 4403 (flag apagado) |
 | `browser_cancel` | `browser_command` sin esperar + `browser.controller.cancel` del servidor |
+| `browser_find_invoice` | F4: `tool.start` → registro del controlador → navigate+snapshot+click |
 | `error` | `message.complete` con error; un prompt `boom` además recibe error JSON-RPC |
 | `lento` | Turno largo con pausas: para Parar (`session.interrupt`) y `close_socket` |
 | `rate_limited` | Todo login → 429 con `Retry-After` (pantalla de rate limit) |

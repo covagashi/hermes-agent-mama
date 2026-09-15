@@ -25,6 +25,7 @@ class FakeGatewayScriptTest {
                 "browser_off",
                 "browser_cancel",
                 "chats_demo",
+                "browser_find_invoice",
                 "error",
                 "lento",
                 "rate_limited",
